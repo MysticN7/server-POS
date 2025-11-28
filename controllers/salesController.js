@@ -18,6 +18,29 @@ exports.createSale = async (req, res) => {
         const { customer_id, items, discount, paid_amount, payment_method, note } = req.body;
         const user_id = req.user.id;
 
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            await session.abortTransaction();
+            return res.status(400).json({ message: 'Cart items are required to create a sale' });
+        }
+
+        let resolvedCustomerId = customer_id;
+
+        if (!resolvedCustomerId) {
+            // Ensure a fallback "Walk-in Customer" always exists
+            const walkInFilter = { name: 'Walk-in Customer', phone: '0000000000' };
+            let walkInCustomer = await Customer.findOne(walkInFilter).session(session);
+
+            if (!walkInCustomer) {
+                walkInCustomer = new Customer({
+                    ...walkInFilter,
+                    address: 'N/A'
+                });
+                await walkInCustomer.save({ session });
+            }
+
+            resolvedCustomerId = walkInCustomer._id;
+        }
+
         // Calculate totals
         let total_amount = 0;
         const invoiceItemsData = [];
@@ -56,7 +79,7 @@ exports.createSale = async (req, res) => {
         // Create Invoice
         const invoice = new Invoice({
             invoiceNumber: `TEMP-${Date.now()}`,
-            customer: customer_id,
+            customer: resolvedCustomerId,
             totalAmount: total_amount,
             discount: discount || 0,
             paidAmount: paid_amount || 0,
