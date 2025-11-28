@@ -132,6 +132,11 @@ const invoiceSettingsSchema = new mongoose.Schema({
         default: 2,
         min: 1,
         max: 3
+    },
+    farewell_text: {
+        type: String,
+        trim: true,
+        default: 'Come Again'
     }
 }, {
     timestamps: true

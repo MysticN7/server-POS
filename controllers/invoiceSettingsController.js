@@ -31,6 +31,8 @@ exports.getSettings = async (req, res) => {
                 logo_position: 'center',
                 logo_size_px: 24,
                 grid_thickness_px: 2
+                ,
+                farewell_text: 'Come Again'
             });
         }
 
@@ -74,7 +76,8 @@ exports.updateSettings = async (req, res) => {
                 'compact_mode',
                 'logo_position',
                 'logo_size_px',
-                'grid_thickness_px'
+                'grid_thickness_px',
+                'farewell_text'
             ];
 
             updatableFields.forEach((field) => {

@@ -16,5 +16,6 @@ router.get('/', auth, adminOnly, userController.getAllUsers);
 router.post('/', auth, adminOnly, userController.createUser);
 router.put('/:id', auth, adminOnly, userController.updateUser);
 router.delete('/:id', auth, adminOnly, userController.deleteUser);
+router.get('/permissions', auth, adminOnly, userController.getPermissionsCatalog);
 
 module.exports = router;
