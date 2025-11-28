@@ -24,11 +24,13 @@ exports.getSettings = async (req, res) => {
                 show_icons: true,
                 logo_url: '',
                 show_logo: false,
-                show_rx_table: true
-                ,
+                show_rx_table: true,
                 paper_width_mm: 80,
                 paper_margin_mm: 4,
-                compact_mode: true
+                compact_mode: true,
+                logo_position: 'center',
+                logo_size_px: 24,
+                grid_thickness_px: 2
             });
         }
 
@@ -66,11 +68,13 @@ exports.updateSettings = async (req, res) => {
                 'show_icons',
                 'logo_url',
                 'show_logo',
-                'show_rx_table'
-                ,
+                'show_rx_table',
                 'paper_width_mm',
                 'paper_margin_mm',
-                'compact_mode'
+                'compact_mode',
+                'logo_position',
+                'logo_size_px',
+                'grid_thickness_px'
             ];
 
             updatableFields.forEach((field) => {
@@ -88,3 +92,31 @@ exports.updateSettings = async (req, res) => {
         res.status(400).json({ message: error.message });
     }
 };
+
+// Logo upload using Cloudinary
+const multer = require('multer');
+const { uploadImage } = require('../utils/cloudinary');
+const upload = multer({ storage: multer.memoryStorage() });
+
+exports.uploadLogoHandler = [upload.single('logo'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: 'Logo file is required' });
+        }
+
+        let settings = await InvoiceSettings.findOne();
+        if (!settings) {
+            settings = await InvoiceSettings.create({});
+        }
+
+        const result = await uploadImage(req.file.buffer, 'pos-brand');
+        settings.logo_url = result.url;
+        settings.logo_cloudinary_id = result.publicId;
+        await settings.save();
+
+        res.json(settings.toObject());
+    } catch (error) {
+        console.error('Error uploading logo:', error);
+        res.status(500).json({ message: error.message });
+    }
+}];

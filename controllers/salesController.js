@@ -209,8 +209,9 @@ exports.createSale = async (req, res) => {
 
         await invoice.save({ session });
 
-        // Update invoice number to be sequential
-        invoice.invoiceNumber = invoice._id.toString().slice(-6).toUpperCase();
+        // Update invoice number to be sequential and padded (e.g., 01, 02 ... 10)
+        const count = await Invoice.countDocuments();
+        invoice.invoiceNumber = String(count).padStart(2, '0');
         await invoice.save({ session });
 
         // Create Invoice Items

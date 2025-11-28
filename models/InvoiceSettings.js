@@ -111,6 +111,27 @@ const invoiceSettingsSchema = new mongoose.Schema({
     compact_mode: {
         type: Boolean,
         default: true
+    },
+    logo_position: {
+        type: String,
+        enum: ['left', 'center', 'right'],
+        default: 'center'
+    },
+    logo_size_px: {
+        type: Number,
+        default: 24,
+        min: 12,
+        max: 64
+    },
+    logo_cloudinary_id: {
+        type: String,
+        trim: true
+    },
+    grid_thickness_px: {
+        type: Number,
+        default: 2,
+        min: 1,
+        max: 3
     }
 }, {
     timestamps: true
