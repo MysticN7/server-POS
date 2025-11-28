@@ -69,6 +69,49 @@ const invoiceSettingsSchema = new mongoose.Schema({
         default: 0,
         min: 0
     }
+    ,
+    accent_color: {
+        type: String,
+        trim: true,
+        default: '#1f2937'
+    },
+    theme: {
+        type: String,
+        trim: true,
+        default: 'modern'
+    },
+    show_icons: {
+        type: Boolean,
+        default: true
+    },
+    logo_url: {
+        type: String,
+        trim: true
+    },
+    show_logo: {
+        type: Boolean,
+        default: false
+    },
+    show_rx_table: {
+        type: Boolean,
+        default: true
+    },
+    paper_width_mm: {
+        type: Number,
+        default: 80,
+        min: 50,
+        max: 90
+    },
+    paper_margin_mm: {
+        type: Number,
+        default: 4,
+        min: 0,
+        max: 10
+    },
+    compact_mode: {
+        type: Boolean,
+        default: true
+    }
 }, {
     timestamps: true
 });

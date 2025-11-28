@@ -18,7 +18,17 @@ exports.getSettings = async (req, res) => {
                 header_font_size: 12,
                 body_font_size: 10,
                 show_note: true,
-                show_signature: false
+                show_signature: false,
+                accent_color: '#1f2937',
+                theme: 'modern',
+                show_icons: true,
+                logo_url: '',
+                show_logo: false,
+                show_rx_table: true
+                ,
+                paper_width_mm: 80,
+                paper_margin_mm: 4,
+                compact_mode: true
             });
         }
 
@@ -50,7 +60,17 @@ exports.updateSettings = async (req, res) => {
                 'show_note',
                 'show_signature',
                 'invoice_prefix',
-                'tax_rate'
+                'tax_rate',
+                'accent_color',
+                'theme',
+                'show_icons',
+                'logo_url',
+                'show_logo',
+                'show_rx_table'
+                ,
+                'paper_width_mm',
+                'paper_margin_mm',
+                'compact_mode'
             ];
 
             updatableFields.forEach((field) => {

@@ -49,14 +49,18 @@ exports.createUser = async (req, res) => {
     try {
         const { name, email, password, role = 'SALESPERSON', permissions = [] } = req.body;
 
-        if (!name || !email || !password) {
-            return res.status(400).json({ message: 'Name, email, and password are required' });
+        if (!name || !password) {
+            return res.status(400).json({ message: 'Name and password are required' });
         }
+
+        const generatedEmail = email && email.trim() !== ''
+            ? email
+            : `${(req.body.username || name).toLowerCase().replace(/\s+/g, '.')}.${Date.now()}@local`;
 
         const user = new User({
             name,
             username: req.body.username || name,
-            email,
+            email: generatedEmail,
             password,
             role,
             permissions: ensurePermissions(role, permissions),

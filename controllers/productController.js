@@ -15,6 +15,10 @@ exports.createProduct = async (req, res) => {
     try {
         const productData = { ...req.body };
 
+        if (!productData.sku || (typeof productData.sku === 'string' && productData.sku.trim() === '')) {
+            delete productData.sku;
+        }
+
         // Parse numeric fields (FormData sends everything as strings)
         if (productData.price && productData.price !== '') {
             productData.price = parseFloat(productData.price);
@@ -48,6 +52,10 @@ exports.updateProduct = async (req, res) => {
         const { id } = req.params;
         const updateData = { ...req.body };
 
+        if (updateData.sku !== undefined && (updateData.sku === null || (typeof updateData.sku === 'string' && updateData.sku.trim() === ''))) {
+            delete updateData.sku;
+        }
+
         // Parse numeric fields
         if (updateData.price && updateData.price !== '') {
             updateData.price = parseFloat(updateData.price);
@@ -57,6 +65,9 @@ exports.updateProduct = async (req, res) => {
 
         if (updateData.stockQuantity) {
             updateData.stockQuantity = parseInt(updateData.stockQuantity);
+        }
+        if (updateData.additionalStock) {
+            updateData.additionalStock = parseInt(updateData.additionalStock);
         }
 
         const product = await Product.findById(id);
@@ -75,6 +86,13 @@ exports.updateProduct = async (req, res) => {
             const result = await uploadImage(req.file.buffer, 'pos-products');
             updateData.imageUrl = result.url;
             updateData.cloudinaryId = result.publicId;
+        }
+
+        // Increment stock if additionalStock provided
+        if (updateData.additionalStock && !isNaN(updateData.additionalStock) && updateData.additionalStock > 0) {
+            product.stockQuantity = (product.stockQuantity || 0) + updateData.additionalStock;
+            delete updateData.additionalStock;
+            delete updateData.stockQuantity;
         }
 
         // Update product

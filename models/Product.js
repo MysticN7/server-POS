@@ -8,9 +8,10 @@ const productSchema = new mongoose.Schema({
     },
     sku: {
         type: String,
-        required: true,
         unique: true,
-        trim: true
+        sparse: true,
+        trim: true,
+        default: null
     },
     category: {
         type: String,
