@@ -10,10 +10,15 @@ exports.getSettings = async (req, res) => {
                 address: 'Dhaka, Bangladesh',
                 phone: '+880 1234 567890',
                 email: 'info@minaroptics.com',
+                website: '',
+                map_link: '',
                 footer_text: 'Thank you for your business!',
                 show_served_by: true,
                 show_date_time: true,
-                show_note: true
+                header_font_size: 12,
+                body_font_size: 10,
+                show_note: true,
+                show_signature: false
             });
         }
 
@@ -36,6 +41,7 @@ exports.updateSettings = async (req, res) => {
                 'phone',
                 'email',
                 'website',
+                'map_link',
                 'footer_text',
                 'show_served_by',
                 'show_date_time',

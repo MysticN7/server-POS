@@ -23,6 +23,10 @@ const invoiceSettingsSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    map_link: {
+        type: String,
+        trim: true
+    },
     footer_text: {
         type: String,
         trim: true
