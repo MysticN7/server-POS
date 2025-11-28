@@ -12,6 +12,9 @@ exports.createSale = async (req, res) => {
     session.startTransaction();
 
     try {
+        console.log('Create Sale Request Body:', JSON.stringify(req.body, null, 2));
+        console.log('Create Sale User:', req.user);
+
         const { customer_id, items, discount, paid_amount, payment_method, note } = req.body;
         const user_id = req.user.id;
 
