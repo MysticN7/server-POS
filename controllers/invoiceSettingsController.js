@@ -3,15 +3,21 @@ const InvoiceSettings = require('../models/InvoiceSettings');
 exports.getSettings = async (req, res) => {
     try {
         let settings = await InvoiceSettings.findOne();
+
         if (!settings) {
-            // Create default settings if none exist
-            settings = new InvoiceSettings({
-                shopName: 'Minar Optics',
-                invoicePrefix: 'INV'
+            settings = await InvoiceSettings.create({
+                business_name: 'Minar Optics',
+                address: 'Dhaka, Bangladesh',
+                phone: '+880 1234 567890',
+                email: 'info@minaroptics.com',
+                footer_text: 'Thank you for your business!',
+                show_served_by: true,
+                show_date_time: true,
+                show_note: true
             });
-            await settings.save();
         }
-        res.json(settings);
+
+        res.json(settings.toObject());
     } catch (error) {
         console.error('Error fetching settings:', error);
         res.status(500).json({ message: error.message });
@@ -22,12 +28,35 @@ exports.updateSettings = async (req, res) => {
     try {
         let settings = await InvoiceSettings.findOne();
         if (!settings) {
-            settings = new InvoiceSettings(req.body);
+            settings = await InvoiceSettings.create(req.body);
         } else {
-            Object.assign(settings, req.body);
+            const updatableFields = [
+                'business_name',
+                'address',
+                'phone',
+                'email',
+                'website',
+                'footer_text',
+                'show_served_by',
+                'show_date_time',
+                'header_font_size',
+                'body_font_size',
+                'show_note',
+                'show_signature',
+                'invoice_prefix',
+                'tax_rate'
+            ];
+
+            updatableFields.forEach((field) => {
+                if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+                    settings[field] = req.body[field];
+                }
+            });
+
+            await settings.save();
         }
-        await settings.save();
-        res.json(settings);
+
+        res.json(settings.toObject());
     } catch (error) {
         console.error('Error updating settings:', error);
         res.status(400).json({ message: error.message });

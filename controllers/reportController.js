@@ -4,6 +4,35 @@ const Expense = require('../models/Expense');
 const CashTransaction = require('../models/CashTransaction');
 const Product = require('../models/Product');
 
+const defaultSummaryResponse = {
+    totalSales: 0,
+    netSales: 0,
+    totalPaid: 0,
+    totalDue: 0,
+    transactionCount: 0
+};
+
+const getDateRange = (query = {}) => {
+    if (query.startDate && query.endDate) {
+        const start = new Date(query.startDate);
+        start.setHours(0, 0, 0, 0);
+
+        const end = new Date(query.endDate);
+        end.setHours(23, 59, 59, 999);
+
+        return { start, end };
+    }
+
+    // default to last 30 days
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    const start = new Date(end);
+    start.setDate(start.getDate() - 30);
+    start.setHours(0, 0, 0, 0);
+
+    return { start, end };
+};
+
 // Dashboard Stats
 exports.getDashboardStats = async (req, res) => {
     try {
@@ -76,13 +105,7 @@ exports.getPendingInvoices = async (req, res) => {
 // Sales Summary
 exports.getSalesSummary = async (req, res) => {
     try {
-        const { startDate, endDate } = req.query;
-
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
+        const { start, end } = getDateRange(req.query);
 
         const summary = await Invoice.aggregate([
             {
@@ -103,12 +126,18 @@ exports.getSalesSummary = async (req, res) => {
             }
         ]);
 
-        res.json(summary[0] || {
-            totalSales: 0,
-            totalCollected: 0,
-            totalDue: 0,
-            totalDiscount: 0,
-            count: 0
+        const raw = summary[0];
+
+        if (!raw) {
+            return res.json(defaultSummaryResponse);
+        }
+
+        res.json({
+            totalSales: raw.totalSales,
+            netSales: raw.totalSales - raw.totalDiscount,
+            totalPaid: raw.totalCollected,
+            totalDue: raw.totalDue,
+            transactionCount: raw.count
         });
     } catch (error) {
         console.error('Error fetching sales summary:', error);
@@ -119,21 +148,19 @@ exports.getSalesSummary = async (req, res) => {
 // Product Performance
 exports.getProductPerformance = async (req, res) => {
     try {
-        const { startDate, endDate } = req.query;
+        const { start, end } = getDateRange(req.query);
+        const limit = parseInt(req.query.limit, 10) || 10;
 
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-
-        // Get all invoice items in date range
         const invoices = await Invoice.find({
             createdAt: { $gte: start, $lte: end },
             status: { $ne: 'CANCELLED' }
         }).select('_id');
 
         const invoiceIds = invoices.map(inv => inv._id);
+
+        if (!invoiceIds.length) {
+            return res.json([]);
+        }
 
         const performance = await InvoiceItem.aggregate([
             {
@@ -143,17 +170,47 @@ exports.getProductPerformance = async (req, res) => {
             },
             {
                 $group: {
-                    _id: '$itemName',
+                    _id: {
+                        product: '$product',
+                        itemName: '$itemName'
+                    },
                     totalQuantity: { $sum: '$quantity' },
                     totalRevenue: { $sum: '$totalPrice' }
                 }
             },
             {
-                $sort: { totalRevenue: -1 }
+                $lookup: {
+                    from: 'products',
+                    localField: '_id.product',
+                    foreignField: '_id',
+                    as: 'product'
+                }
             },
             {
-                $limit: 10
-            }
+                $addFields: {
+                    productId: '$_id.product',
+                    productName: {
+                        $ifNull: [
+                            { $first: '$product.name' },
+                            '$_id.itemName',
+                            'Unnamed Product'
+                        ]
+                    },
+                    sku: { $first: '$product.sku' }
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    productId: 1,
+                    productName: 1,
+                    sku: 1,
+                    totalQuantity: 1,
+                    totalRevenue: 1
+                }
+            },
+            { $sort: { totalRevenue: -1 } },
+            { $limit: limit }
         ]);
 
         res.json(performance);

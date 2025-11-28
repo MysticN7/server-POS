@@ -1,11 +1,18 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
+const ROLE_OPTIONS = ['ADMIN', 'MANAGER', 'SALESPERSON'];
+
 const userSchema = new mongoose.Schema({
+    name: {
+        type: String,
+        trim: true,
+        default: function () {
+            return this.username || 'User';
+        }
+    },
     username: {
         type: String,
-        required: true,
-        unique: true,
         trim: true
     },
     email: {
@@ -21,17 +28,36 @@ const userSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: ['ADMIN', 'STAFF'],
-        default: 'STAFF'
+        enum: ROLE_OPTIONS,
+        default: 'SALESPERSON'
+    },
+    permissions: {
+        type: [String],
+        default: []
+    },
+    status: {
+        type: String,
+        enum: ['ACTIVE', 'INACTIVE'],
+        default: 'ACTIVE'
     }
 }, {
     timestamps: true
 });
 
-// Hash password before saving
+// Hash password before saving & keep username/name in sync
 userSchema.pre('save', async function (next) {
-    if (!this.isModified('password')) return next();
-    this.password = await bcrypt.hash(this.password, 10);
+    if (!this.username && this.name) {
+        this.username = this.name.toLowerCase().replace(/\s+/g, '.');
+    }
+
+    if (!this.name && this.username) {
+        this.name = this.username;
+    }
+
+    if (this.isModified('password')) {
+        this.password = await bcrypt.hash(this.password, 10);
+    }
+
     next();
 });
 
@@ -41,3 +67,4 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
 };
 
 module.exports = mongoose.model('User', userSchema);
+module.exports.ROLE_OPTIONS = ROLE_OPTIONS;

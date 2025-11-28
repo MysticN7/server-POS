@@ -6,6 +6,123 @@ const PaymentHistory = require('../models/PaymentHistory');
 const Product = require('../models/Product');
 const mongoose = require('mongoose');
 
+const STATUS_LABELS = {
+    PAID: 'Paid',
+    PARTIAL: 'Partial',
+    PENDING: 'Pending',
+    CANCELLED: 'Cancelled'
+};
+
+const mapCustomer = (customerDoc) => {
+    if (!customerDoc) return null;
+    const customer = customerDoc.toObject ? customerDoc.toObject() : customerDoc;
+    return {
+        id: customer._id,
+        name: customer.name,
+        phone: customer.phone,
+        address: customer.address || '',
+        email: customer.email || ''
+    };
+};
+
+const mapInvoiceItem = (itemDoc) => {
+    const item = itemDoc.toObject ? itemDoc.toObject() : itemDoc;
+    return {
+        id: item._id,
+        product_id: item.product || null,
+        item_name: item.itemName || item.item_name,
+        quantity: item.quantity,
+        unit_price: item.unitPrice ?? item.unit_price,
+        subtotal: item.totalPrice ?? item.subtotal ?? ((item.unitPrice || 0) * (item.quantity || 0)),
+        prescription_data: item.prescriptionData ?? item.prescription_data ?? null
+    };
+};
+
+const mapPayment = (paymentDoc) => {
+    const payment = paymentDoc.toObject ? paymentDoc.toObject() : paymentDoc;
+    return {
+        id: payment._id,
+        amount: payment.amount,
+        payment_method: payment.paymentMethod || payment.payment_method,
+        payment_date: payment.createdAt || payment.payment_date,
+        notes: payment.note || payment.notes || '',
+        processor: payment.processor || null
+    };
+};
+
+const mapUser = (userDoc) => {
+    if (!userDoc) return null;
+    const user = userDoc.toObject ? userDoc.toObject() : userDoc;
+    return {
+        id: user._id,
+        name: user.username || user.name || 'System User',
+        email: user.email
+    };
+};
+
+const formatInvoice = (invoiceDoc, { includeCustomer = false, includeUser = false, items = null, payments = null } = {}) => {
+    const invoice = invoiceDoc.toObject ? invoiceDoc.toObject() : invoiceDoc;
+    const totalAmount = Number(invoice.totalAmount || invoice.total_amount || 0);
+    const discount = Number(invoice.discount || 0);
+    const finalAmount = totalAmount - discount;
+    const paidAmount = Number(invoice.paidAmount || invoice.paid_amount || 0);
+    const dueAmount = invoice.dueAmount !== undefined ? Number(invoice.dueAmount) : finalAmount - paidAmount;
+
+    const formatted = {
+        id: invoice._id,
+        invoice_number: invoice.invoiceNumber || invoice.invoice_number,
+        total_amount: totalAmount,
+        final_amount: finalAmount,
+        paid_amount: paidAmount,
+        due_amount: dueAmount,
+        discount,
+        status: STATUS_LABELS[invoice.status] || invoice.status || 'Pending',
+        payment_method: invoice.paymentMethod || invoice.payment_method || 'Cash',
+        note: invoice.note || '',
+        createdAt: invoice.createdAt,
+        updatedAt: invoice.updatedAt
+    };
+
+    if (includeCustomer) {
+        formatted.Customer = mapCustomer(invoice.customer);
+    }
+
+    if (includeUser) {
+        formatted.User = mapUser(invoice.createdBy);
+    }
+
+    if (items) {
+        formatted.InvoiceItems = items.map(mapInvoiceItem);
+    }
+
+    if (payments) {
+        formatted.PaymentHistories = payments.map(mapPayment);
+    }
+
+    return formatted;
+};
+
+const buildInvoicePayload = async (invoiceId, options = {}) => {
+    const invoice = await Invoice.findById(invoiceId)
+        .populate('customer', 'name phone address email')
+        .populate('createdBy', 'username email');
+
+    if (!invoice) return null;
+
+    const [items, payments] = await Promise.all([
+        InvoiceItem.find({ invoice: invoice._id }),
+        PaymentHistory.find({ invoice: invoice._id }).sort({ createdAt: -1 })
+    ]);
+
+    return formatInvoice(invoice, {
+        includeCustomer: true,
+        includeUser: true,
+        items,
+        payments,
+        ...options
+    });
+};
+
 // Create a new Sale (Invoice)
 exports.createSale = async (req, res) => {
     const session = await mongoose.startSession();
@@ -106,7 +223,9 @@ exports.createSale = async (req, res) => {
 
         await session.commitTransaction();
 
-        res.json({ message: 'Sale completed successfully', invoice });
+        const payload = await buildInvoicePayload(invoice._id);
+
+        res.json({ message: 'Sale completed successfully', invoice: payload });
     } catch (err) {
         await session.abortTransaction();
         console.error('=== Sales Creation Error ===');
@@ -125,7 +244,10 @@ exports.getSales = async (req, res) => {
             .populate('customer', 'name phone')
             .populate('createdBy', 'username')
             .sort({ createdAt: -1 });
-        res.json(sales);
+        const formatted = await Promise.all(
+            sales.map(async (sale) => formatInvoice(sale, { includeCustomer: true, includeUser: true }))
+        );
+        res.json(formatted);
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Server Error' });
@@ -135,22 +257,13 @@ exports.getSales = async (req, res) => {
 // Get single sale by ID
 exports.getSaleById = async (req, res) => {
     try {
-        const sale = await Invoice.findById(req.params.id)
-            .populate('customer')
-            .populate('createdBy', 'username email');
+        const payload = await buildInvoicePayload(req.params.id);
 
-        if (!sale) {
+        if (!payload) {
             return res.status(404).json({ message: 'Invoice not found' });
         }
 
-        // Get invoice items
-        const items = await InvoiceItem.find({ invoice: sale._id });
-
-        // Get payment history
-        const payments = await PaymentHistory.find({ invoice: sale._id })
-            .sort({ createdAt: -1 });
-
-        res.json({ ...sale.toObject(), items, payments });
+        res.json(payload);
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Server Error' });
@@ -191,18 +304,22 @@ exports.getSalesByDateRange = async (req, res) => {
         }
 
         const sales = await Invoice.find(query)
-            .populate('customer', 'name phone')
+            .populate('customer', 'name phone address')
+            .populate('createdBy', 'username email')
             .sort({ createdAt: -1 });
 
-        // Calculate summary stats
+        const formattedSales = sales.map((sale) =>
+            formatInvoice(sale, { includeCustomer: true, includeUser: true })
+        );
+
         const summary = {
-            totalSales: sales.reduce((sum, s) => sum + s.totalAmount, 0),
-            totalCollected: sales.reduce((sum, s) => sum + s.paidAmount, 0),
-            totalDue: sales.reduce((sum, s) => sum + s.dueAmount, 0),
-            count: sales.length
+            totalSales: formattedSales.reduce((sum, s) => sum + s.total_amount, 0),
+            totalCollected: formattedSales.reduce((sum, s) => sum + s.paid_amount, 0),
+            totalDue: formattedSales.reduce((sum, s) => sum + s.due_amount, 0),
+            count: formattedSales.length
         };
 
-        res.json({ sales, summary });
+        res.json({ sales: formattedSales, summary });
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Server Error' });

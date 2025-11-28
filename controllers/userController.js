@@ -1,9 +1,31 @@
 const User = require('../models/User');
 
+const PERMISSIONS_LIST = ['DASHBOARD', 'POS', 'INVENTORY', 'EXPENSES', 'REPORTS', 'JOBCARDS', 'SETTINGS', 'USERS'];
+
+const ensurePermissions = (role, permissions = []) => {
+    if (role === 'ADMIN') return PERMISSIONS_LIST;
+    if (!Array.isArray(permissions)) return [];
+    return permissions.filter((perm) => PERMISSIONS_LIST.includes(perm));
+};
+
+const sanitizeUser = (userDoc) => {
+    const user = userDoc.toObject({ getters: true });
+    return {
+        id: user._id,
+        name: user.name || user.username,
+        email: user.email,
+        role: user.role,
+        permissions: ensurePermissions(user.role, user.permissions),
+        status: user.status,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+    };
+};
+
 exports.getAllUsers = async (req, res) => {
     try {
-        const users = await User.find().select('-password').sort({ createdAt: -1 });
-        res.json(users);
+        const users = await User.find().sort({ createdAt: -1 });
+        res.json(users.map(sanitizeUser));
     } catch (error) {
         console.error('Error fetching users:', error);
         res.status(500).json({ message: error.message });
@@ -12,11 +34,11 @@ exports.getAllUsers = async (req, res) => {
 
 exports.getUserById = async (req, res) => {
     try {
-        const user = await User.findById(req.params.id).select('-password');
+        const user = await User.findById(req.params.id);
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
-        res.json(user);
+        res.json(sanitizeUser(user));
     } catch (error) {
         console.error('Error fetching user:', error);
         res.status(500).json({ message: error.message });
@@ -25,11 +47,24 @@ exports.getUserById = async (req, res) => {
 
 exports.createUser = async (req, res) => {
     try {
-        const user = new User(req.body);
+        const { name, email, password, role = 'SALESPERSON', permissions = [] } = req.body;
+
+        if (!name || !email || !password) {
+            return res.status(400).json({ message: 'Name, email, and password are required' });
+        }
+
+        const user = new User({
+            name,
+            username: req.body.username || name,
+            email,
+            password,
+            role,
+            permissions: ensurePermissions(role, permissions),
+            status: req.body.status || 'ACTIVE'
+        });
+
         await user.save();
-        const userResponse = user.toObject();
-        delete userResponse.password;
-        res.status(201).json(userResponse);
+        res.status(201).json(sanitizeUser(user));
     } catch (error) {
         console.error('Error creating user:', error);
         res.status(400).json({ message: error.message });
@@ -38,20 +73,39 @@ exports.createUser = async (req, res) => {
 
 exports.updateUser = async (req, res) => {
     try {
-        const updateData = { ...req.body };
-        // Don't allow password update through this endpoint
-        delete updateData.password;
-
-        const user = await User.findByIdAndUpdate(
-            req.params.id,
-            updateData,
-            { new: true, runValidators: true }
-        ).select('-password');
-
+        const user = await User.findById(req.params.id);
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
-        res.json(user);
+
+        const { name, email, role, permissions, status, password } = req.body;
+
+        if (name !== undefined) {
+            user.name = name;
+            user.username = req.body.username || name;
+        }
+
+        if (email !== undefined) {
+            user.email = email;
+        }
+
+        if (role !== undefined) {
+            user.role = role;
+            user.permissions = ensurePermissions(role, permissions ?? user.permissions);
+        } else if (permissions !== undefined) {
+            user.permissions = ensurePermissions(user.role, permissions);
+        }
+
+        if (status !== undefined) {
+            user.status = status;
+        }
+
+        if (password) {
+            user.password = password;
+        }
+
+        await user.save();
+        res.json(sanitizeUser(user));
     } catch (error) {
         console.error('Error updating user:', error);
         res.status(400).json({ message: error.message });

@@ -6,6 +6,8 @@ const Customer = require('./models/Customer');
 const InvoiceSettings = require('./models/InvoiceSettings');
 require('dotenv').config();
 
+const PERMISSIONS_LIST = ['DASHBOARD', 'POS', 'INVENTORY', 'EXPENSES', 'REPORTS', 'JOBCARDS', 'SETTINGS', 'USERS'];
+
 async function seed() {
     try {
         // Connect to MongoDB
@@ -71,32 +73,39 @@ async function seed() {
 
         // Create default admin user
         const admin = new User({
+            name: 'Admin User',
             username: 'admin',
             email: 'admin@minaroptics.com',
             password: 'admin123', // Will be hashed by pre-save hook
-            role: 'ADMIN'
+            role: 'ADMIN',
+            permissions: PERMISSIONS_LIST
         });
         await admin.save();
         console.log('✅ Created admin user');
 
         // Create staff user
         const staff = new User({
+            name: 'Sales Staff',
             username: 'staff',
             email: 'staff@minaroptics.com',
             password: 'staff123',
-            role: 'STAFF'
+            role: 'SALESPERSON',
+            permissions: ['POS', 'INVENTORY', 'REPORTS']
         });
         await staff.save();
         console.log('✅ Created staff user');
 
         // Create default Invoice Settings
         const settings = new InvoiceSettings({
-            shopName: 'Minar Optics',
-            shopAddress: 'Dhaka, Bangladesh',
-            shopPhone: '+880 1234 567890',
-            shopEmail: 'info@minaroptics.com',
-            invoicePrefix: 'INV',
-            termsAndConditions: 'Thank you for your business! Come Again 👓'
+            business_name: 'Minar Optics',
+            address: 'Dhaka, Bangladesh',
+            phone: '+880 1234 567890',
+            email: 'info@minaroptics.com',
+            footer_text: 'Thank you for your business! Come Again 👓',
+            show_served_by: true,
+            show_date_time: true,
+            show_note: true,
+            invoice_prefix: 'INV'
         });
         await settings.save();
         console.log('✅ Created invoice settings');

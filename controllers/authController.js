@@ -1,9 +1,29 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 
+const PERMISSIONS_LIST = ['DASHBOARD', 'POS', 'INVENTORY', 'EXPENSES', 'REPORTS', 'JOBCARDS', 'SETTINGS', 'USERS'];
+
+const ensurePermissions = (role, permissions = []) => {
+    if (role === 'ADMIN') return PERMISSIONS_LIST;
+    if (!Array.isArray(permissions)) return [];
+    return permissions.filter((perm) => PERMISSIONS_LIST.includes(perm));
+};
+
+const serializeUser = (user) => ({
+    id: user._id,
+    name: user.name || user.username,
+    email: user.email,
+    role: user.role,
+    permissions: ensurePermissions(user.role, user.permissions)
+});
+
 exports.register = async (req, res) => {
     try {
-        const { username, email, password, role } = req.body;
+        const { name, email, password, role = 'SALESPERSON', permissions = [] } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({ message: 'Email and password are required' });
+        }
 
         // Check if user exists
         let user = await User.findOne({ email });
@@ -13,10 +33,12 @@ exports.register = async (req, res) => {
 
         // Create user (password hashing is handled by the model's pre-save hook)
         user = new User({
-            username,
+            name: name || email.split('@')[0],
+            username: req.body.username || name || email.split('@')[0],
             email,
             password,
-            role
+            role,
+            permissions: ensurePermissions(role, permissions)
         });
 
         await user.save();
@@ -60,12 +82,7 @@ exports.login = async (req, res) => {
                 if (err) throw err;
                 res.json({
                     token,
-                    user: {
-                        id: user._id,
-                        username: user.username,
-                        email: user.email,
-                        role: user.role
-                    }
+                    user: serializeUser(user)
                 });
             }
         );
