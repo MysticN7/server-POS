@@ -1,0 +1,29 @@
+[dotenv@17.2.3] injecting env (7) from .env -- tip: ­ƒæÑ sync secrets across teammates & machines: https://dotenvx.com/ops
+DB Config: SQLite
+Executing (default): SELECT 1+1 AS result
+Database connected.
+Fetching products...
+Executing (default): SELECT `id`, `name`, `sku`, `category`, `price`, `stockQuantity`, `description`, `imageUrl`, `createdAt`, `updatedAt` FROM `Products` AS `Product`;
+Error fetching products: Error
+    at Database.<anonymous> (C:\Users\MAHADI\Downloads\POS\server\node_modules\sequelize\lib\dialects\sqlite\query.js:185:27)
+    at C:\Users\MAHADI\Downloads\POS\server\node_modules\sequelize\lib\dialects\sqlite\query.js:183:50
+    at new Promise (<anonymous>)
+    at Query.run (C:\Users\MAHADI\Downloads\POS\server\node_modules\sequelize\lib\dialects\sqlite\query.js:183:12)
+    at C:\Users\MAHADI\Downloads\POS\server\node_modules\sequelize\lib\sequelize.js:315:28
+    at async SQLiteQueryInterface.select (C:\Users\MAHADI\Downloads\POS\server\node_modules\sequelize\lib\dialects\abstract\query-interface.js:407:12)
+    at async Product.findAll (C:\Users\MAHADI\Downloads\POS\server\node_modules\sequelize\lib\model.js:1140:21)
+    at async testProductFetch (C:\Users\MAHADI\Downloads\POS\server\test-product-db.js:10:26) {
+  name: 'SequelizeDatabaseError',
+  parent: [Error: SQLITE_ERROR: no such column: imageUrl] {
+    errno: 1,
+    code: 'SQLITE_ERROR',
+    sql: 'SELECT `id`, `name`, `sku`, `category`, `price`, `stockQuantity`, `description`, `imageUrl`, `createdAt`, `updatedAt` FROM `Products` AS `Product`;'
+  },
+  original: [Error: SQLITE_ERROR: no such column: imageUrl] {
+    errno: 1,
+    code: 'SQLITE_ERROR',
+    sql: 'SELECT `id`, `name`, `sku`, `category`, `price`, `stockQuantity`, `description`, `imageUrl`, `createdAt`, `updatedAt` FROM `Products` AS `Product`;'
+  },
+  sql: 'SELECT `id`, `name`, `sku`, `category`, `price`, `stockQuantity`, `description`, `imageUrl`, `createdAt`, `updatedAt` FROM `Products` AS `Product`;',
+  parameters: {}
+}

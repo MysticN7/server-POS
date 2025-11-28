@@ -1,0 +1,20 @@
+
+> server@1.0.0 start
+> node index.js
+
+[dotenv@17.2.3] injecting env (7) from .env -- tip: ­ƒöÉ prevent committing .env to code: https://dotenvx.com/precommit
+DB Config: SQLite
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ­ƒöä add secrets lifecycle management: https://dotenvx.com/ops
+Connecting to database...
+Executing (default): SELECT 1+1 AS result
+Database connected successfully.
+Attempting to start server...
+Ô£à Server is running on port 5000
+­ƒöù API URL: http://localhost:5000
+Executing (default): SELECT `id`, `name`, `email`, `password_hash`, `role`, `permissions`, `createdAt`, `updatedAt` FROM `Users` AS `User` WHERE `User`.`email` = 'admin@minaroptics.com';
+[0mPOST /api/auth/login [32m200[0m 106.496 ms - 251[0m
+Executing (default): SELECT `id`, `name`, `email`, `password_hash`, `role`, `permissions`, `createdAt`, `updatedAt` FROM `Users` AS `User` WHERE `User`.`email` = 'staff_1764267998278@test.com';
+Executing (default): INSERT INTO `Users` (`id`,`name`,`email`,`password_hash`,`role`,`permissions`,`createdAt`,`updatedAt`) VALUES (NULL,$1,$2,$3,$4,$5,$6,$7);
+[0mPOST /api/users [32m200[0m 97.805 ms - 267[0m
+Executing (default): SELECT `id`, `name`, `email`, `password_hash`, `role`, `permissions`, `createdAt`, `updatedAt` FROM `Users` AS `User` WHERE `User`.`email` = 'staff_1764267998278@test.com';
+[0mPOST /api/auth/login [32m200[0m 70.617 ms - 272[0m

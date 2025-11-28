@@ -1,0 +1,13 @@
+
+> server@1.0.0 start
+> node index.js
+
+[dotenv@17.2.3] injecting env (7) from .env -- tip: ­ƒöÉ prevent building .env in docker: https://dotenvx.com/prebuild
+DB Config: SQLite
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ­ƒøá´©Å  run anywhere with `dotenvx run -- yourcommand`
+Connecting to database...
+Executing (default): SELECT 1+1 AS result
+Database connected successfully.
+Attempting to start server...
+Ô£à Server is running on port 5000
+­ƒöù API URL: http://localhost:5000

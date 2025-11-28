@@ -1,0 +1,14 @@
+const express = require('express');
+const router = express.Router();
+const salesController = require('../controllers/salesController');
+const auth = require('../middleware/auth');
+
+router.post('/', auth, salesController.createSale);
+router.get('/', auth, salesController.getSales);
+router.get('/date-range', auth, salesController.getSalesByDateRange);
+router.get('/:id', auth, salesController.getSaleById);
+router.put('/:id', auth, salesController.updateSale);
+router.delete('/:id', auth, salesController.deleteSale);
+router.post('/:id/payment', auth, salesController.addPayment);
+
+module.exports = router;

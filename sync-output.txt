@@ -1,0 +1,39 @@
+[dotenv@17.2.3] injecting env (7) from .env -- tip: Ô£à audit secrets and track compliance: https://dotenvx.com/ops
+DB Config: SQLite
+Syncing database models...
+Executing (default): SELECT name FROM sqlite_master WHERE type='table' AND name='Users';
+Executing (default): PRAGMA TABLE_INFO(`Users`);
+Executing (default): PRAGMA foreign_key_list(`Users`)
+Executing (default): PRAGMA INDEX_LIST(`Users`)
+Executing (default): PRAGMA INDEX_INFO(`sqlite_autoindex_Users_1`)
+Executing (default): PRAGMA foreign_key_list(`Users`)
+Executing (default): PRAGMA TABLE_INFO(`Users`);
+Executing (default): PRAGMA INDEX_LIST(`Users`)
+Executing (default): PRAGMA INDEX_INFO(`sqlite_autoindex_Users_1`)
+Executing (default): PRAGMA foreign_key_list(`Users`)
+Executing (default): CREATE TABLE IF NOT EXISTS `Users_backup` (`id` INTEGER PRIMARY KEY, `name` VARCHAR(255) NOT NULL, `email` VARCHAR(255) NOT NULL UNIQUE, `password_hash` VARCHAR(255) NOT NULL, `role` TEXT DEFAULT 'SALESPERSON', `createdAt` DATETIME NOT NULL, `updatedAt` DATETIME NOT NULL, `permissions` TEXT DEFAULT '[]');
+Executing (default): INSERT INTO `Users_backup` SELECT `id`, `name`, `email`, `password_hash`, `role`, `createdAt`, `updatedAt`, `permissions` FROM `Users`;
+ÔØî Error syncing database: Error
+    at Database.<anonymous> (C:\Users\MAHADI\Downloads\POS\server\node_modules\sequelize\lib\dialects\sqlite\query.js:185:27)
+    at C:\Users\MAHADI\Downloads\POS\server\node_modules\sequelize\lib\dialects\sqlite\query.js:183:50
+    at new Promise (<anonymous>)
+    at Query.run (C:\Users\MAHADI\Downloads\POS\server\node_modules\sequelize\lib\dialects\sqlite\query.js:183:12)
+    at C:\Users\MAHADI\Downloads\POS\server\node_modules\sequelize\lib\sequelize.js:315:28
+    at async SQLiteQueryInterface.changeColumn (C:\Users\MAHADI\Downloads\POS\server\node_modules\sequelize\lib\dialects\sqlite\query-interface.js:43:7)
+    at async User.sync (C:\Users\MAHADI\Downloads\POS\server\node_modules\sequelize\lib\model.js:984:11)
+    at async Sequelize.sync (C:\Users\MAHADI\Downloads\POS\server\node_modules\sequelize\lib\sequelize.js:377:9)
+    at async syncDatabase (C:\Users\MAHADI\Downloads\POS\server\sync-db.js:8:9) {
+  name: 'SequelizeDatabaseError',
+  parent: [Error: SQLITE_ERROR: table Users_backup has 7 columns but 8 values were supplied] {
+    errno: 1,
+    code: 'SQLITE_ERROR',
+    sql: 'INSERT INTO `Users_backup` SELECT `id`, `name`, `email`, `password_hash`, `role`, `createdAt`, `updatedAt`, `permissions` FROM `Users`;'
+  },
+  original: [Error: SQLITE_ERROR: table Users_backup has 7 columns but 8 values were supplied] {
+    errno: 1,
+    code: 'SQLITE_ERROR',
+    sql: 'INSERT INTO `Users_backup` SELECT `id`, `name`, `email`, `password_hash`, `role`, `createdAt`, `updatedAt`, `permissions` FROM `Users`;'
+  },
+  sql: 'INSERT INTO `Users_backup` SELECT `id`, `name`, `email`, `password_hash`, `role`, `createdAt`, `updatedAt`, `permissions` FROM `Users`;',
+  parameters: {}
+}

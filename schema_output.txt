@@ -1,0 +1,11 @@
+[dotenv@17.2.3] injecting env (7) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+DB Config: SQLite
+Executing (default): PRAGMA table_info(Invoices);
+Columns: [
+  'id',             'invoice_number',
+  'total_amount',   'discount',
+  'paid_amount',    'due_amount',
+  'payment_method', 'note',
+  'createdAt',      'updatedAt',
+  'user_id',        'customer_id'
+]
