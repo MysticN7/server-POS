@@ -143,13 +143,13 @@ exports.createSale = async (req, res) => {
         let resolvedCustomerId = customer_id;
 
         if (!resolvedCustomerId) {
-            // Ensure a fallback "Walk-in Customer" always exists
-            const walkInFilter = { name: 'Walk-in Customer', phone: '0000000000' };
+            // Ensure a fallback "Walk-in Customer" always exists (no phone)
+            const walkInFilter = { name: 'Walk-in Customer' };
             let walkInCustomer = await Customer.findOne(walkInFilter).session(session);
 
             if (!walkInCustomer) {
                 walkInCustomer = new Customer({
-                    ...walkInFilter,
+                    name: 'Walk-in Customer',
                     address: 'N/A'
                 });
                 await walkInCustomer.save({ session });
