@@ -173,11 +173,15 @@ exports.createSale = async (req, res) => {
 
             // Decrement Stock
             if (item.product_id) {
-                await Product.findByIdAndUpdate(
+                console.log(`Attempting to reduce stock for product ${item.product_id} by ${item.quantity}`);
+                const updatedProduct = await Product.findByIdAndUpdate(
                     item.product_id,
                     { $inc: { stockQuantity: -item.quantity } },
-                    { session }
+                    { session, new: true }
                 );
+                console.log(`Stock updated for ${item.product_id}. New stock: ${updatedProduct?.stockQuantity}`);
+            } else {
+                console.warn(`Skipping stock reduction for item ${item.name} (No product_id)`);
             }
 
             invoiceItemsData.push({

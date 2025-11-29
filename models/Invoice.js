@@ -50,7 +50,9 @@ const invoiceSchema = new mongoose.Schema({
         ref: 'User'
     }
 }, {
-    timestamps: true
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
 });
 
 // Index for faster searches
