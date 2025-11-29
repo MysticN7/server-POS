@@ -1,8 +1,22 @@
 const Customer = require('../models/Customer');
+const { logAction } = require('./auditLogController');
 
 exports.getAllCustomers = async (req, res) => {
     try {
-        const customers = await Customer.find().sort({ createdAt: -1 });
+        const { search } = req.query;
+        let query = {};
+
+        if (search) {
+            query = {
+                $or: [
+                    { name: { $regex: search, $options: 'i' } },
+                    { phone: { $regex: search, $options: 'i' } },
+                    { email: { $regex: search, $options: 'i' } }
+                ]
+            };
+        }
+
+        const customers = await Customer.find(query).sort({ createdAt: -1 });
         res.json(customers);
     } catch (error) {
         console.error('Error fetching customers:', error);
@@ -27,6 +41,10 @@ exports.createCustomer = async (req, res) => {
     try {
         const customer = new Customer(req.body);
         await customer.save();
+
+        // Log action
+        logAction('CREATE_CUSTOMER', `Created customer: ${customer.name}`, req.user?.id, customer._id, 'Customer', req.ip);
+
         res.status(201).json(customer);
     } catch (error) {
         console.error('Error creating customer:', error);
@@ -44,6 +62,10 @@ exports.updateCustomer = async (req, res) => {
         if (!customer) {
             return res.status(404).json({ message: 'Customer not found' });
         }
+
+        // Log action
+        logAction('UPDATE_CUSTOMER', `Updated customer: ${customer.name}`, req.user?.id, customer._id, 'Customer', req.ip);
+
         res.json(customer);
     } catch (error) {
         console.error('Error updating customer:', error);
@@ -57,6 +79,10 @@ exports.deleteCustomer = async (req, res) => {
         if (!customer) {
             return res.status(404).json({ message: 'Customer not found' });
         }
+
+        // Log action
+        logAction('DELETE_CUSTOMER', `Deleted customer: ${customer.name}`, req.user?.id, req.params.id, 'Customer', req.ip);
+
         res.json({ message: 'Customer deleted successfully' });
     } catch (error) {
         console.error('Error deleting customer:', error);

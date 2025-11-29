@@ -20,6 +20,23 @@ const customerSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    customer_type: {
+        type: String,
+        enum: ['regular', 'vip', 'wholesale'],
+        default: 'regular'
+    },
+    notes: {
+        type: String,
+        trim: true
+    },
+    total_purchases: {
+        type: Number,
+        default: 0
+    },
+    total_visits: {
+        type: Number,
+        default: 0
+    },
     totalPurchases: {
         type: Number,
         default: 0
