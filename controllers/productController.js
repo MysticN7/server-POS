@@ -1,5 +1,6 @@
 const Product = require('../models/Product');
 const { uploadImage, deleteImage } = require('../utils/cloudinary');
+const { logAction } = require('./auditLogController');
 
 exports.getAllProducts = async (req, res) => {
     try {
@@ -39,6 +40,11 @@ exports.createProduct = async (req, res) => {
 
         const product = new Product(productData);
         await product.save();
+
+
+
+        // Log action
+        logAction('CREATE_PRODUCT', `Created product: ${product.name}`, req.user.id, product._id, 'Product', req.ip);
 
         res.status(201).json(product);
     } catch (error) {
@@ -100,6 +106,9 @@ exports.updateProduct = async (req, res) => {
         await product.save();
 
         res.json(product);
+
+        // Log action
+        logAction('UPDATE_PRODUCT', `Updated product: ${product.name}`, req.user.id, product._id, 'Product', req.ip);
     } catch (error) {
         console.error('Error updating product:', error);
         res.status(400).json({ message: error.message });
@@ -126,6 +135,9 @@ exports.deleteProduct = async (req, res) => {
         await product.deleteOne();
         console.log('Backend: Product deleted successfully');
         res.json({ message: 'Product deleted' });
+
+        // Log action
+        logAction('DELETE_PRODUCT', `Deleted product: ${product.name} (ID: ${id})`, req.user.id, id, 'Product', req.ip);
     } catch (error) {
         console.error('Backend: Error deleting product:', error);
         res.status(500).json({ message: error.message });

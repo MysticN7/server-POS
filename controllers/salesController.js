@@ -5,6 +5,7 @@ const User = require('../models/User');
 const PaymentHistory = require('../models/PaymentHistory');
 const Product = require('../models/Product');
 const mongoose = require('mongoose');
+const { logAction } = require('./auditLogController');
 
 const STATUS_LABELS = {
     PAID: 'Paid',
@@ -231,6 +232,9 @@ exports.createSale = async (req, res) => {
         const payload = await buildInvoicePayload(invoice._id);
 
         res.json({ message: 'Sale completed successfully', invoice: payload });
+
+        // Log action
+        logAction('CREATE_SALE', `Created invoice: ${invoice.invoiceNumber} (Amount: ${final_amount})`, user_id, invoice._id, 'Invoice', req.ip);
     } catch (err) {
         await session.abortTransaction();
         console.error('=== Sales Creation Error ===');
@@ -420,6 +424,9 @@ exports.deleteSale = async (req, res) => {
         await sale.save();
 
         res.json({ message: 'Invoice cancelled successfully' });
+
+        // Log action
+        logAction('CANCEL_SALE', `Cancelled invoice: ${sale.invoiceNumber}`, req.user.id, sale._id, 'Invoice', req.ip);
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Server Error' });

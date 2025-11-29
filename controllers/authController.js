@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const { logAction } = require('./auditLogController');
 
 const PERMISSIONS_LIST = [
     'DASHBOARD', 'POS', 'INVENTORY', 'EXPENSES', 'REPORTS', 'JOBCARDS', 'SETTINGS', 'USERS', 'BANK_BOOK', 'CASH_BOOK',
@@ -89,6 +90,10 @@ exports.login = async (req, res) => {
             { expiresIn: '1d' },
             (err, token) => {
                 if (err) throw err;
+
+                // Log successful login
+                logAction('LOGIN', `User ${user.name} logged in`, user._id, user._id, 'User', req.ip);
+
                 res.json({
                     token,
                     user: serializeUser(user)

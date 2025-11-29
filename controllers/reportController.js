@@ -261,18 +261,40 @@ exports.getProfitLoss = async (req, res) => {
             }
         ]);
 
+        const expensesByCategory = await Expense.aggregate([
+            {
+                $match: {
+                    date: { $gte: start, $lte: end }
+                }
+            },
+            {
+                $group: {
+                    _id: '$category',
+                    total: { $sum: '$amount' }
+                }
+            }
+        ]);
+
+        const expensesByCategoryMap = {};
+        expensesByCategory.forEach(item => {
+            expensesByCategoryMap[item._id] = item.total;
+        });
+
         const revenue = salesRevenue[0]?.total || 0;
         const totalDiscount = salesRevenue[0]?.discount || 0;
         const totalExpenses = expenses[0]?.total || 0;
+        const cogs = 0; // Cost of Goods Sold - Not currently tracked
         const netRevenue = revenue - totalDiscount;
-        const profit = netRevenue - totalExpenses;
+        const profit = netRevenue - cogs - totalExpenses;
 
         res.json({
-            revenue,
+            totalRevenue: revenue,
             discount: totalDiscount,
             netRevenue,
-            expenses: totalExpenses,
-            profit
+            totalExpenses,
+            cogs,
+            profit,
+            expensesByCategory: expensesByCategoryMap
         });
     } catch (error) {
         console.error('Error generating profit/loss report:', error);

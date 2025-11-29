@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const { logAction } = require('./auditLogController');
 
 const PERMISSIONS_LIST = [
     // Core pages (backwards compatible)
@@ -79,6 +80,10 @@ exports.createUser = async (req, res) => {
         });
 
         await user.save();
+
+        // Log action
+        logAction('CREATE_USER', `Created user: ${user.name} (${user.role})`, req.user.id, user._id, 'User', req.ip);
+
         res.status(201).json(sanitizeUser(user));
     } catch (error) {
         console.error('Error creating user:', error);
@@ -120,6 +125,10 @@ exports.updateUser = async (req, res) => {
         }
 
         await user.save();
+
+        // Log action
+        logAction('UPDATE_USER', `Updated user: ${user.name}`, req.user.id, user._id, 'User', req.ip);
+
         res.json(sanitizeUser(user));
     } catch (error) {
         console.error('Error updating user:', error);
@@ -148,6 +157,9 @@ exports.deleteUser = async (req, res) => {
             return res.status(404).json({ message: 'User not found' });
         }
         res.json({ message: 'User deleted successfully' });
+
+        // Log action
+        logAction('DELETE_USER', `Deleted user: ${user.name}`, req.user.id, req.params.id, 'User', req.ip);
     } catch (error) {
         console.error('Error deleting user:', error);
         res.status(500).json({ message: error.message });
