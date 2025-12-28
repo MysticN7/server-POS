@@ -7,24 +7,26 @@ async function fixData() {
         await mongoose.connect(process.env.MONGODB_URI);
         console.log('✅ Connected to MongoDB');
 
-        // Reset admin password to admin123
+        // Reset admin exactly as in seed.js
         const admin = await User.findOne({ username: 'admin' });
         if (admin) {
+            admin.email = 'admin@minaroptics.com';
             admin.password = 'admin123';
-            admin.role = 'ADMIN'; // Ensure role is correct
+            admin.role = 'ADMIN';
             await admin.save();
-            console.log('✅ Admin password reset to admin123');
+            console.log('✅ Admin synced with seed.js (email: admin@minaroptics.com, password: admin123)');
         } else {
             console.log('⚠️ Admin user not found by username "admin"');
         }
 
-        // Fix staff role and ensure password
+        // Fix staff exactly as in seed.js
         const staff = await User.findOne({ username: 'staff' });
         if (staff) {
+            staff.email = 'staff@minaroptics.com';
             staff.password = 'staff123';
-            staff.role = 'STAFF';
+            staff.role = 'SALESPERSON'; // Seed says SALESPERSON
             await staff.save();
-            console.log('✅ Staff password set to staff123 and role updated to STAFF');
+            console.log('✅ Staff synced with seed.js (email: staff@minaroptics.com, password: staff123, role: SALESPERSON)');
         } else {
             console.log('⚠️ Staff user not found by username "staff"');
         }
