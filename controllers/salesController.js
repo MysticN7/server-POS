@@ -282,7 +282,24 @@ exports.getSaleById = async (req, res) => {
 // Get sales by date range
 exports.getSalesByDateRange = async (req, res) => {
     try {
-        const { startDate, endDate, search } = req.query;
+        let { startDate, endDate, search } = req.query;
+
+        // PERMISSION CHECK: Restrict to "Today" if user lacks VIEW_MONTHLY_SALES
+        const canViewHistory = req.user.role === 'ADMIN' || (req.user.permissions && req.user.permissions.includes('VIEW_MONTHLY_SALES'));
+
+        if (!canViewHistory) {
+            const today = new Date();
+            // Create start of today (00:00:00)
+            const startOfToday = new Date(today);
+            startOfToday.setHours(0, 0, 0, 0);
+
+            // Create end of today (23:59:59)
+            const endOfToday = new Date(today);
+            endOfToday.setHours(23, 59, 59, 999);
+
+            startDate = startOfToday.toISOString();
+            endDate = endOfToday.toISOString();
+        }
 
         let query = { status: { $ne: 'CANCELLED' } };
 
@@ -291,9 +308,14 @@ exports.getSalesByDateRange = async (req, res) => {
             const start = new Date(startDate);
             const end = new Date(endDate);
 
-            // Only override time if simple date string provided (length 10 e.g. "YYYY-MM-DD")
-            if (startDate.length === 10) start.setHours(0, 0, 0, 0);
-            if (endDate.length === 10) end.setHours(23, 59, 59, 999);
+            // If strictly enforced today, we already set hours. 
+            // If from query, we might need to set them if just date string.
+            if (!canViewHistory) {
+                // Already set correctly above
+            } else {
+                if (startDate.length === 10) start.setHours(0, 0, 0, 0);
+                if (endDate.length === 10) end.setHours(23, 59, 59, 999);
+            }
 
             query.createdAt = { $gte: start, $lte: end };
         }
