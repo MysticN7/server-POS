@@ -10,7 +10,8 @@ const PERMISSIONS_LIST = [
     'JOBCARDS_VIEW', 'JOBCARDS_CREATE', 'JOBCARDS_UPDATE', 'JOBCARDS_DELETE',
     'SETTINGS_VIEW', 'SETTINGS_UPDATE',
     'USERS_VIEW', 'USERS_CREATE', 'USERS_UPDATE', 'USERS_DELETE',
-    'BANK_BOOK_VIEW', 'CASH_BOOK_VIEW'
+    'BANK_BOOK_VIEW', 'CASH_BOOK_VIEW',
+    'VIEW_DAILY_SALES', 'VIEW_MONTHLY_SALES'
 ];
 
 const ensurePermissions = (role, permissions = []) => {
@@ -86,7 +87,8 @@ exports.login = async (req, res) => {
         const payload = {
             user: {
                 id: user._id,
-                role: user.role
+                role: user.role,
+                permissions: ensurePermissions(user.role, user.permissions)
             }
         };
 
