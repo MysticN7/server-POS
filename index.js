@@ -16,7 +16,7 @@ process.on('exit', (code) => {
 
 // Middleware
 app.use(cors({
-    origin: '*', // Allow all origins for production (Cloudflare custom domain)
+    origin: true, // Use reflection to allow all origins while supporting credentials
     credentials: true
 }));
 // app.use(helmet({
