@@ -15,7 +15,10 @@ process.on('exit', (code) => {
 });
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: '*', // Allow all origins for production (Cloudflare custom domain)
+    credentials: true
+}));
 // app.use(helmet({
 //     crossOriginResourcePolicy: false,
 // }));

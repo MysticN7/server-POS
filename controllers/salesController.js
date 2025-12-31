@@ -289,10 +289,11 @@ exports.getSalesByDateRange = async (req, res) => {
         // Date range filter
         if (startDate && endDate) {
             const start = new Date(startDate);
-            start.setHours(0, 0, 0, 0);
-
             const end = new Date(endDate);
-            end.setHours(23, 59, 59, 999);
+
+            // Only override time if simple date string provided (length 10 e.g. "YYYY-MM-DD")
+            if (startDate.length === 10) start.setHours(0, 0, 0, 0);
+            if (endDate.length === 10) end.setHours(23, 59, 59, 999);
 
             query.createdAt = { $gte: start, $lte: end };
         }
