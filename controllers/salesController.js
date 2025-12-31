@@ -286,8 +286,20 @@ exports.getSalesByDateRange = async (req, res) => {
 
         // PERMISSION CHECK: Restrict to "Today" if user lacks VIEW_MONTHLY_SALES
         const canViewHistory = req.user.role === 'ADMIN' || (req.user.permissions && req.user.permissions.includes('VIEW_MONTHLY_SALES'));
+        const isSearching = search && search.trim().length > 0;
 
-        if (!canViewHistory) {
+        // Check if query is within a single day (approx 24h)
+        let isSingleDay = false;
+        if (startDate && endDate) {
+            // Frontend sends start at 00:00 and end at 23:59, so diff is ~24h
+            const diff = new Date(endDate).getTime() - new Date(startDate).getTime();
+            isSingleDay = diff <= 86500000; // 24h + small buffer
+        }
+
+        // Rule: If no monthly permission, restrict access unless:
+        // 1. It's a search
+        // 2. It's a single day query (<= 24h)
+        if (!canViewHistory && !isSearching && !isSingleDay) {
             const today = new Date();
             // Create start of today (00:00:00)
             const startOfToday = new Date(today);
@@ -308,14 +320,9 @@ exports.getSalesByDateRange = async (req, res) => {
             const start = new Date(startDate);
             const end = new Date(endDate);
 
-            // If strictly enforced today, we already set hours. 
-            // If from query, we might need to set them if just date string.
-            if (!canViewHistory) {
-                // Already set correctly above
-            } else {
-                if (startDate.length === 10) start.setHours(0, 0, 0, 0);
-                if (endDate.length === 10) end.setHours(23, 59, 59, 999);
-            }
+            // If simple date string provided (length 10 e.g. "YYYY-MM-DD")
+            if (startDate.length === 10) start.setHours(0, 0, 0, 0);
+            if (endDate.length === 10) end.setHours(23, 59, 59, 999);
 
             query.createdAt = { $gte: start, $lte: end };
         }
