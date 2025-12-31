@@ -11,7 +11,8 @@ const PERMISSIONS_LIST = [
     'JOBCARDS_VIEW', 'JOBCARDS_CREATE', 'JOBCARDS_UPDATE', 'JOBCARDS_DELETE',
     'SETTINGS_VIEW', 'SETTINGS_UPDATE',
     'USERS_VIEW', 'USERS_CREATE', 'USERS_UPDATE', 'USERS_DELETE',
-    'BANK_BOOK_VIEW', 'CASH_BOOK_VIEW'
+    'BANK_BOOK_VIEW', 'CASH_BOOK_VIEW',
+    'VIEW_DAILY_SALES', 'VIEW_MONTHLY_SALES'
 ];
 
 const ensurePermissions = (role, permissions = []) => {
@@ -145,7 +146,8 @@ exports.getPermissionsCatalog = async (req, res) => {
         Reports: ['REPORTS_VIEW', 'REPORTS_FINANCIAL', 'BANK_BOOK', 'CASH_BOOK', 'BANK_BOOK_VIEW', 'CASH_BOOK_VIEW'],
         JobCards: ['JOBCARDS_VIEW', 'JOBCARDS_CREATE', 'JOBCARDS_UPDATE', 'JOBCARDS_DELETE'],
         Settings: ['SETTINGS_VIEW', 'SETTINGS_UPDATE'],
-        Users: ['USERS_VIEW', 'USERS_CREATE', 'USERS_UPDATE', 'USERS_DELETE']
+        Users: ['USERS_VIEW', 'USERS_CREATE', 'USERS_UPDATE', 'USERS_DELETE'],
+        Sales: ['VIEW_DAILY_SALES', 'VIEW_MONTHLY_SALES']
     };
     res.json({ list: PERMISSIONS_LIST, groups });
 };

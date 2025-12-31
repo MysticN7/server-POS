@@ -164,7 +164,7 @@ exports.createSale = async (req, res) => {
         const invoiceItemsData = [];
 
         for (const item of items) {
-            if (!item.name || !item.unit_price || !item.quantity) {
+            if (!item.name || item.unit_price === undefined || item.unit_price === null || !item.quantity) {
                 await session.abortTransaction();
                 return res.status(400).json({ message: 'Each item must include name, unit_price, and quantity' });
             }

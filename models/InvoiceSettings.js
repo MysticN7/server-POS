@@ -137,6 +137,12 @@ const invoiceSettingsSchema = new mongoose.Schema({
         type: String,
         trim: true,
         default: 'Come Again'
+    },
+    rx_font_size: {
+        type: Number,
+        default: 10,
+        min: 6,
+        max: 16
     }
 }, {
     timestamps: true
