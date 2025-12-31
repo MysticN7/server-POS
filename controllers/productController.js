@@ -18,6 +18,7 @@ exports.createProduct = async (req, res) => {
 
         if (!productData.sku || (typeof productData.sku === 'string' && productData.sku.trim() === '')) {
             delete productData.sku;
+            productData.sku = undefined; // Explicitly ensure it's undefined
         }
 
         // Parse numeric fields (FormData sends everything as strings)
@@ -64,6 +65,7 @@ exports.updateProduct = async (req, res) => {
 
         if (updateData.sku !== undefined && (updateData.sku === null || (typeof updateData.sku === 'string' && updateData.sku.trim() === ''))) {
             delete updateData.sku;
+            updateData.$unset = { ...updateData.$unset, sku: 1 }; // Explicitly unset in MongoDB
         }
 
         // Parse numeric fields
