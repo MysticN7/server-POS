@@ -77,7 +77,9 @@ exports.updateSettings = async (req, res) => {
                 'logo_position',
                 'logo_size_px',
                 'grid_thickness_px',
-                'farewell_text'
+                'farewell_text',
+                'rx_font_size',
+                'text_styles'
             ];
 
             updatableFields.forEach((field) => {
