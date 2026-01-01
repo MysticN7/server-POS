@@ -17,7 +17,7 @@ exports.getSettings = async (req, res) => {
                 show_date_time: true,
                 header_font_size: 12,
                 body_font_size: 10,
-                rx_font_size: 10,
+                rx_font_size: 15,
                 show_note: true,
                 show_signature: false,
                 accent_color: '#1f2937',
@@ -39,7 +39,7 @@ exports.getSettings = async (req, res) => {
         // Convert to plain object and apply defaults for any missing fields
         const result = settings.toObject();
         if (result.rx_font_size === undefined || result.rx_font_size === null) {
-            result.rx_font_size = 10;
+            result.rx_font_size = 15;
         }
 
         res.json(result);
