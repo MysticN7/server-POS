@@ -11,7 +11,7 @@ const PERMISSIONS_LIST = [
     'SETTINGS_VIEW', 'SETTINGS_UPDATE',
     'USERS_VIEW', 'USERS_CREATE', 'USERS_UPDATE', 'USERS_DELETE',
     'BANK_BOOK_VIEW', 'CASH_BOOK_VIEW',
-    'VIEW_MONTHLY_SALES'
+    'VIEW_MONTHLY_SALES', 'DELETE_SALES'
 ];
 
 const ensurePermissions = (role, permissions = []) => {
@@ -111,5 +111,15 @@ exports.login = async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
+    }
+};
+
+exports.getMe = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id).select('-password');
+        res.json(serializeUser(user));
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server Error' });
     }
 };
