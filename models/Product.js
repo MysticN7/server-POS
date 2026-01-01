@@ -14,7 +14,6 @@ const productSchema = new mongoose.Schema({
     },
     category: {
         type: String,
-        enum: ['FRAMES', 'LENS', 'ACCESSORIES'],
         required: true
     },
     price: {
