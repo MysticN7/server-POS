@@ -145,13 +145,7 @@ const invoiceSettingsSchema = new mongoose.Schema({
         max: 20
     },
     text_styles: {
-        type: Map,
-        of: new mongoose.Schema({
-            font_family: String,
-            font_size: Number,
-            align: String,
-            font_weight: mongoose.Schema.Types.Mixed
-        }, { _id: false }),
+        type: mongoose.Schema.Types.Mixed,
         default: {}
     }
 }, {
