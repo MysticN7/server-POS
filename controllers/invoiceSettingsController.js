@@ -41,6 +41,9 @@ exports.getSettings = async (req, res) => {
         if (result.rx_font_size === undefined || result.rx_font_size === null) {
             result.rx_font_size = 15;
         }
+        if (!result.currency_symbol) {
+            result.currency_symbol = '৳';
+        }
 
         res.json(result);
     } catch (error) {
@@ -86,6 +89,7 @@ exports.updateSettings = async (req, res) => {
                 'grid_thickness_px',
                 'farewell_text',
                 'rx_font_size',
+                'currency_symbol',
                 'text_styles'
             ];
 
