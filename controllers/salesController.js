@@ -444,6 +444,11 @@ exports.updateSale = async (req, res) => {
 // Soft delete sale
 exports.deleteSale = async (req, res) => {
     try {
+        // PERMISSION CHECK
+        if (req.user.role !== 'ADMIN' && (!req.user.permissions || !req.user.permissions.includes('DELETE_SALES'))) {
+            return res.status(403).json({ message: 'Access denied. You do not have permission to delete invoices.' });
+        }
+
         const sale = await Invoice.findById(req.params.id);
 
         if (!sale) {

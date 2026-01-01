@@ -12,7 +12,7 @@ const PERMISSIONS_LIST = [
     'SETTINGS_VIEW', 'SETTINGS_UPDATE',
     'USERS_VIEW', 'USERS_CREATE', 'USERS_UPDATE', 'USERS_DELETE',
     'BANK_BOOK_VIEW', 'CASH_BOOK_VIEW',
-    'VIEW_MONTHLY_SALES'
+    'VIEW_MONTHLY_SALES', 'DELETE_SALES'
 ];
 
 const ensurePermissions = (role, permissions = []) => {
@@ -147,7 +147,7 @@ exports.getPermissionsCatalog = async (req, res) => {
         JobCards: ['JOBCARDS_VIEW', 'JOBCARDS_CREATE', 'JOBCARDS_UPDATE', 'JOBCARDS_DELETE'],
         Settings: ['SETTINGS_VIEW', 'SETTINGS_UPDATE'],
         Users: ['USERS_VIEW', 'USERS_CREATE', 'USERS_UPDATE', 'USERS_DELETE'],
-        Sales: ['VIEW_MONTHLY_SALES']
+        Sales: ['VIEW_MONTHLY_SALES', 'DELETE_SALES']
     };
     res.json({ list: PERMISSIONS_LIST, groups });
 };
