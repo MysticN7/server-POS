@@ -143,6 +143,16 @@ const invoiceSettingsSchema = new mongoose.Schema({
         default: 10,
         min: 6,
         max: 16
+    },
+    text_styles: {
+        type: Map,
+        of: new mongoose.Schema({
+            font_family: String,
+            font_size: Number,
+            align: String,
+            font_weight: mongoose.Schema.Types.Mixed
+        }, { _id: false }),
+        default: {}
     }
 }, {
     timestamps: true
