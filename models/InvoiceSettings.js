@@ -144,6 +144,12 @@ const invoiceSettingsSchema = new mongoose.Schema({
         min: 15,
         max: 20
     },
+    currency_symbol: {
+        type: String,
+        enum: ['BDT', 'TK', '৳'],
+        default: '৳',
+        trim: true
+    },
     text_styles: {
         type: mongoose.Schema.Types.Mixed,
         default: {}
