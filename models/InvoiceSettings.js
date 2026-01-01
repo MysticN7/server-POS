@@ -138,7 +138,7 @@ const invoiceSettingsSchema = new mongoose.Schema({
         trim: true,
         default: 'Come Again'
     },
-    rx_font_size: {
+    rx_font_size: { // Default font size for Rx fields
         type: Number,
         default: 15,
         min: 15,
