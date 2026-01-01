@@ -141,8 +141,8 @@ const invoiceSettingsSchema = new mongoose.Schema({
     rx_font_size: {
         type: Number,
         default: 15,
-        min: 6,
-        max: 16
+        min: 15,
+        max: 20
     },
     text_styles: {
         type: Map,
