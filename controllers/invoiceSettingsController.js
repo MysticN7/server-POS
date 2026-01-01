@@ -17,6 +17,7 @@ exports.getSettings = async (req, res) => {
                 show_date_time: true,
                 header_font_size: 12,
                 body_font_size: 10,
+                rx_font_size: 10,
                 show_note: true,
                 show_signature: false,
                 accent_color: '#1f2937',
@@ -30,18 +31,24 @@ exports.getSettings = async (req, res) => {
                 compact_mode: true,
                 logo_position: 'center',
                 logo_size_px: 24,
-                grid_thickness_px: 2
-                ,
+                grid_thickness_px: 2,
                 farewell_text: 'Come Again'
             });
         }
 
-        res.json(settings.toObject());
+        // Convert to plain object and apply defaults for any missing fields
+        const result = settings.toObject();
+        if (result.rx_font_size === undefined || result.rx_font_size === null) {
+            result.rx_font_size = 10;
+        }
+
+        res.json(result);
     } catch (error) {
         console.error('Error fetching settings:', error);
         res.status(500).json({ message: error.message });
     }
 };
+
 
 exports.updateSettings = async (req, res) => {
     try {
