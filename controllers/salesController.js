@@ -626,7 +626,7 @@ exports.getPaymentHistory = async (req, res) => {
                 path: 'invoice',
                 select: 'invoiceNumber customerName',
                 populate: {
-                    path: 'Customer',
+                    path: 'customer',
                     select: 'name phone'
                 }
             });
