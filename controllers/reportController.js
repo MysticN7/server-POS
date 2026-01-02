@@ -3,6 +3,7 @@ const InvoiceItem = require('../models/InvoiceItem');
 const Expense = require('../models/Expense');
 const CashTransaction = require('../models/CashTransaction');
 const Product = require('../models/Product');
+const PaymentHistory = require('../models/PaymentHistory');
 
 const defaultSummaryResponse = {
     totalSales: 0,
@@ -55,6 +56,21 @@ exports.getDashboardStats = async (req, res) => {
             }
         ]);
 
+
+        const todayCollected = await PaymentHistory.aggregate([
+            {
+                $match: {
+                    createdAt: { $gte: today }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: '$amount' }
+                }
+            }
+        ]);
+
         const totalCustomers = await Invoice.distinct('customer').then(customers => customers.length);
         const lowStockProducts = await Product.countDocuments({ stockQuantity: { $lt: 10 } });
         const pendingInvoices = await Invoice.countDocuments({ status: { $in: ['PENDING', 'PARTIAL'] } });
@@ -62,6 +78,7 @@ exports.getDashboardStats = async (req, res) => {
         res.json({
             todaySales: todaySales[0]?.total || 0,
             todaySalesCount: todaySales[0]?.count || 0,
+            todayCollected: todayCollected[0]?.total || 0,
             totalCustomers,
             lowStockProducts,
             pendingInvoices
