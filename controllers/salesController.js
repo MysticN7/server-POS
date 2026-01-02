@@ -71,6 +71,7 @@ const formatInvoice = (invoiceDoc, { includeCustomer = false, includeUser = fals
 
     const formatted = {
         id: invoice._id,
+        _id: invoice._id, // Ensure _id is available for backward compatibility
         invoice_number: invoice.invoiceNumber || invoice.invoice_number,
         total_amount: totalAmount,
         final_amount: finalAmount,
