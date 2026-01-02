@@ -14,6 +14,81 @@ const STATUS_LABELS = {
     CANCELLED: 'Cancelled'
 };
 
+// Create Legacy/Manual Invoice
+exports.createLegacySale = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const { invoice_number, customer_name, total_due, note } = req.body;
+        const user_id = req.user.id;
+
+        // Validation
+        if (!invoice_number || !total_due) {
+            return res.status(400).json({ message: 'Invoice Number and Total Due are required' });
+        }
+
+        // Check if invoice number already exists
+        const existing = await Invoice.findOne({ invoiceNumber: invoice_number });
+        if (existing) {
+            return res.status(400).json({ message: 'Invoice number already exists' });
+        }
+
+        // Handle Customer (Find by name or create generic)
+        let customer = await Customer.findOne({ name: customer_name });
+        if (!customer && customer_name) {
+            customer = new Customer({
+                name: customer_name,
+                address: 'N/A (Legacy)',
+                phone: 'N/A'
+            });
+            await customer.save({ session });
+        } else if (!customer) {
+            // Fallback to Walk-in if no name provided
+            customer = await Customer.findOne({ name: 'Walk-in Customer' });
+        }
+
+        // Create Invoice
+        const invoice = new Invoice({
+            invoiceNumber: invoice_number,
+            customer: customer._id,
+            totalAmount: total_due,
+            paidAmount: 0,
+            dueAmount: total_due,
+            paymentMethod: 'Cash', // Default for legacy record
+            status: 'PENDING',
+            note: note || 'Legacy/Paper Invoice Entry',
+            createdBy: user_id
+        });
+
+        await invoice.save({ session });
+
+        // Create a dummy item to represent the balance
+        const item = new InvoiceItem({
+            invoice: invoice._id,
+            itemName: 'Previous Balance / Legacy Due',
+            quantity: 1,
+            unitPrice: total_due,
+            totalPrice: total_due
+        });
+        await item.save({ session });
+
+        await session.commitTransaction();
+
+        const payload = await buildInvoicePayload(invoice._id);
+        res.json({ message: 'Legacy invoice created', invoice: payload });
+
+        logAction('CREATE_LEGACY', `Created legacy invoice: ${invoice_number} (Due: ${total_due})`, user_id, invoice._id, 'Invoice', req.ip);
+
+    } catch (err) {
+        await session.abortTransaction();
+        console.error(err);
+        res.status(500).json({ message: 'Server Error' });
+    } finally {
+        session.endSession();
+    }
+};
+
 const mapCustomer = (customerDoc) => {
     if (!customerDoc) return null;
     const customer = customerDoc.toObject ? customerDoc.toObject() : customerDoc;

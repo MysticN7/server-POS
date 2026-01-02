@@ -4,6 +4,7 @@ const salesController = require('../controllers/salesController');
 const auth = require('../middleware/auth');
 
 router.post('/', auth, salesController.createSale);
+router.post('/legacy', auth, salesController.createLegacySale);
 router.get('/', auth, salesController.getSales);
 router.get('/date-range', auth, salesController.getSalesByDateRange);
 router.get('/:id', auth, salesController.getSaleById);
