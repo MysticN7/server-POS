@@ -228,6 +228,17 @@ exports.createSale = async (req, res) => {
 
         await InvoiceItem.insertMany(itemsWithInvoiceId, { session });
 
+        // Create Payment History for initial payment
+        if (paid_amount > 0) {
+            const payment = new PaymentHistory({
+                invoice: invoice._id,
+                amount: paid_amount,
+                paymentMethod: payment_method || 'Cash',
+                note: 'Initial Payment'
+            });
+            await payment.save({ session });
+        }
+
         await session.commitTransaction();
 
         const payload = await buildInvoicePayload(invoice._id);
