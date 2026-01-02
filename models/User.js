@@ -39,6 +39,11 @@ const userSchema = new mongoose.Schema({
         type: String,
         enum: ['ACTIVE', 'INACTIVE'],
         default: 'ACTIVE'
+    },
+    // Store the plaintext password set by admin for reference (only admin can view)
+    lastSetPassword: {
+        type: String,
+        select: false  // Not included in queries by default
     }
 }, {
     timestamps: true,
@@ -57,6 +62,8 @@ userSchema.pre('save', async function (next) {
     }
 
     if (this.isModified('password')) {
+        // Store the plaintext password before hashing (for admin reference)
+        this.lastSetPassword = this.password;
         this.password = await bcrypt.hash(this.password, 10);
     }
 

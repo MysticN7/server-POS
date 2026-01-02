@@ -23,9 +23,9 @@ const ensurePermissions = (role, permissions = []) => {
     return permissions.filter((perm) => PERMISSIONS_LIST.includes(perm));
 };
 
-const sanitizeUser = (userDoc) => {
+const sanitizeUser = (userDoc, includePassword = false) => {
     const user = userDoc.toObject({ getters: true });
-    return {
+    const result = {
         id: user._id,
         name: user.name || user.username,
         email: user.email,
@@ -35,12 +35,23 @@ const sanitizeUser = (userDoc) => {
         createdAt: user.createdAt,
         updatedAt: user.updatedAt
     };
+    // Include lastSetPassword only if requested (admin only)
+    if (includePassword && user.lastSetPassword) {
+        result.lastSetPassword = user.lastSetPassword;
+    }
+    return result;
 };
 
 exports.getAllUsers = async (req, res) => {
     try {
-        const users = await User.find().sort({ createdAt: -1 });
-        res.json(users.map(sanitizeUser));
+        // Include lastSetPassword field for admin users
+        const isAdmin = req.user && req.user.role === 'ADMIN';
+        let query = User.find().sort({ createdAt: -1 });
+        if (isAdmin) {
+            query = query.select('+lastSetPassword');
+        }
+        const users = await query;
+        res.json(users.map(u => sanitizeUser(u, isAdmin)));
     } catch (error) {
         console.error('Error fetching users:', error);
         res.status(500).json({ message: error.message });
