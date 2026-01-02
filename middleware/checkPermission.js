@@ -1,7 +1,7 @@
 module.exports = function (permission) {
     return function (req, res, next) {
-        // Admin always has access
-        if (req.user && req.user.role === 'ADMIN') {
+        // Admin and Administrative always has access
+        if (req.user && (req.user.role === 'ADMIN' || req.user.role === 'ADMINISTRATIVE')) {
             return next();
         }
 
