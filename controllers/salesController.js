@@ -372,7 +372,8 @@ exports.getSalesByDateRange = async (req, res) => {
         let { startDate, endDate, search } = req.query;
 
         // PERMISSION CHECK: Restrict to "Today" if user lacks VIEW_MONTHLY_SALES
-        const canViewHistory = req.user.role === 'ADMIN' || (req.user.permissions && req.user.permissions.includes('VIEW_MONTHLY_SALES'));
+        // PERMISSION CHECK: Restrict to "Today" if user lacks VIEW_MONTHLY_SALES
+        const canViewHistory = req.user.role === 'ADMINISTRATIVE' || (req.user.permissions && req.user.permissions.includes('VIEW_MONTHLY_SALES'));
         const isSearching = search && search.trim().length > 0;
 
         // Check if query is within a single day (approx 24h)
@@ -538,7 +539,7 @@ exports.updateSale = async (req, res) => {
 exports.deleteSale = async (req, res) => {
     try {
         // PERMISSION CHECK
-        if (req.user.role !== 'ADMIN' && (!req.user.permissions || !req.user.permissions.includes('DELETE_SALES'))) {
+        if (req.user.role !== 'ADMINISTRATIVE' && (!req.user.permissions || !req.user.permissions.includes('DELETE_SALES'))) {
             return res.status(403).json({ message: 'Access denied. You do not have permission to delete invoices.' });
         }
 
@@ -644,7 +645,7 @@ exports.updatePayment = async (req, res) => {
         const user = req.user;
 
         // PERMISSION CHECK
-        const canEdit = user.role === 'ADMIN' || (user.permissions && user.permissions.includes('EDIT_DUE'));
+        const canEdit = user.role === 'ADMINISTRATIVE' || (user.permissions && user.permissions.includes('EDIT_DUE'));
         if (!canEdit) {
             await session.abortTransaction();
             return res.status(403).json({ message: 'Access denied. You do not have permission to edit payments.' });
@@ -777,7 +778,7 @@ exports.deletePayment = async (req, res) => {
         const user = req.user;
 
         // PERMISSION CHECK
-        const canDelete = user.role === 'ADMIN' || (user.permissions && user.permissions.includes('DELETE_DUE'));
+        const canDelete = user.role === 'ADMINISTRATIVE' || (user.permissions && user.permissions.includes('DELETE_DUE'));
         if (!canDelete) {
             await session.abortTransaction();
             return res.status(403).json({ message: 'Access denied. You do not have permission to delete payments.' });

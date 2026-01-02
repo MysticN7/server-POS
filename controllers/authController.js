@@ -4,7 +4,7 @@ const { logAction } = require('./auditLogController');
 const { PERMISSIONS_LIST } = require('./userController');
 
 const ensurePermissions = (role, permissions = []) => {
-    if (role === 'ADMIN') return PERMISSIONS_LIST;
+    if (role === 'ADMINISTRATIVE') return PERMISSIONS_LIST;
     if (!Array.isArray(permissions)) return [];
     return permissions.filter((perm) => PERMISSIONS_LIST.includes(perm));
 };
