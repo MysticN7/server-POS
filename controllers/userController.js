@@ -1,7 +1,7 @@
 const User = require('../models/User');
 const { logAction } = require('./auditLogController');
 
-const PERMISSIONS_LIST = [
+exports.PERMISSIONS_LIST = [
     // Core pages (backwards compatible)
     'DASHBOARD', 'POS', 'INVENTORY', 'EXPENSES', 'REPORTS', 'JOBCARDS', 'SETTINGS', 'USERS', 'BANK_BOOK', 'CASH_BOOK',
     // Granular actions
@@ -14,6 +14,8 @@ const PERMISSIONS_LIST = [
     'BANK_BOOK_VIEW', 'CASH_BOOK_VIEW',
     'VIEW_MONTHLY_SALES', 'DELETE_SALES', 'DUE_COLLECTION', 'EDIT_DUE', 'DELETE_DUE'
 ];
+
+const PERMISSIONS_LIST = exports.PERMISSIONS_LIST;
 
 const ensurePermissions = (role, permissions = []) => {
     if (role === 'ADMIN') return PERMISSIONS_LIST;

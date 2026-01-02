@@ -1,18 +1,7 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const { logAction } = require('./auditLogController');
-
-const PERMISSIONS_LIST = [
-    'DASHBOARD', 'POS', 'INVENTORY', 'EXPENSES', 'REPORTS', 'JOBCARDS', 'SETTINGS', 'USERS', 'BANK_BOOK', 'CASH_BOOK',
-    'INVENTORY_VIEW', 'INVENTORY_CREATE', 'INVENTORY_UPDATE', 'INVENTORY_DELETE',
-    'EXPENSES_VIEW', 'EXPENSES_CREATE', 'EXPENSES_UPDATE', 'EXPENSES_DELETE',
-    'REPORTS_VIEW', 'REPORTS_FINANCIAL',
-    'JOBCARDS_VIEW', 'JOBCARDS_CREATE', 'JOBCARDS_UPDATE', 'JOBCARDS_DELETE',
-    'SETTINGS_VIEW', 'SETTINGS_UPDATE',
-    'USERS_VIEW', 'USERS_CREATE', 'USERS_UPDATE', 'USERS_DELETE',
-    'BANK_BOOK_VIEW', 'CASH_BOOK_VIEW',
-    'VIEW_MONTHLY_SALES', 'DELETE_SALES', 'DUE_COLLECTION'
-];
+const { PERMISSIONS_LIST } = require('./userController');
 
 const ensurePermissions = (role, permissions = []) => {
     if (role === 'ADMIN') return PERMISSIONS_LIST;
