@@ -57,3 +57,28 @@ exports.getLogs = async (req, res) => {
         res.status(500).json({ message: 'Server Error' });
     }
 };
+
+// Delete audit log (ADMINISTRATIVE only - checked at route level)
+exports.deleteLog = async (req, res) => {
+    try {
+        const log = await AuditLog.findByIdAndDelete(req.params.id);
+        if (!log) {
+            return res.status(404).json({ message: 'Audit log not found' });
+        }
+        res.json({ message: 'Audit log deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting audit log:', error);
+        res.status(500).json({ message: 'Server Error' });
+    }
+};
+
+// Delete all audit logs (ADMINISTRATIVE only)
+exports.deleteAllLogs = async (req, res) => {
+    try {
+        await AuditLog.deleteMany({});
+        res.json({ message: 'All audit logs deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting all audit logs:', error);
+        res.status(500).json({ message: 'Server Error' });
+    }
+};

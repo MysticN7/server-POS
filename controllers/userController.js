@@ -18,7 +18,8 @@ exports.PERMISSIONS_LIST = [
 const PERMISSIONS_LIST = exports.PERMISSIONS_LIST;
 
 const ensurePermissions = (role, permissions = []) => {
-    if (role === 'ADMIN') return PERMISSIONS_LIST;
+    // ADMINISTRATIVE and ADMIN get all permissions
+    if (role === 'ADMINISTRATIVE' || role === 'ADMIN') return PERMISSIONS_LIST;
     if (!Array.isArray(permissions)) return [];
     return permissions.filter((perm) => PERMISSIONS_LIST.includes(perm));
 };
@@ -44,14 +45,24 @@ const sanitizeUser = (userDoc, includePassword = false) => {
 
 exports.getAllUsers = async (req, res) => {
     try {
-        // Include lastSetPassword field for admin users
-        const isAdmin = req.user && req.user.role === 'ADMIN';
+        const requesterRole = req.user?.role;
+        const isAdministrative = requesterRole === 'ADMINISTRATIVE';
+
         let query = User.find().sort({ createdAt: -1 });
-        if (isAdmin) {
+
+        // Only ADMINISTRATIVE can see passwords
+        if (isAdministrative) {
             query = query.select('+lastSetPassword');
         }
-        const users = await query;
-        res.json(users.map(u => sanitizeUser(u, isAdmin)));
+
+        let users = await query;
+
+        // Filter out ADMINISTRATIVE users for non-ADMINISTRATIVE requesters
+        if (!isAdministrative) {
+            users = users.filter(u => u.role !== 'ADMINISTRATIVE');
+        }
+
+        res.json(users.map(u => sanitizeUser(u, isAdministrative)));
     } catch (error) {
         console.error('Error fetching users:', error);
         res.status(500).json({ message: error.message });
@@ -112,6 +123,18 @@ exports.updateUser = async (req, res) => {
             return res.status(404).json({ message: 'User not found' });
         }
 
+        const requesterRole = req.user?.role;
+
+        // Only ADMINISTRATIVE can edit ADMINISTRATIVE users
+        if (user.role === 'ADMINISTRATIVE' && requesterRole !== 'ADMINISTRATIVE') {
+            return res.status(403).json({ message: 'Cannot edit ADMINISTRATIVE users' });
+        }
+
+        // Only ADMINISTRATIVE can set someone as ADMINISTRATIVE
+        if (req.body.role === 'ADMINISTRATIVE' && requesterRole !== 'ADMINISTRATIVE') {
+            return res.status(403).json({ message: 'Only ADMINISTRATIVE can assign ADMINISTRATIVE role' });
+        }
+
         const { name, email, role, permissions, status, password } = req.body;
 
         if (name !== undefined) {
@@ -167,10 +190,17 @@ exports.getPermissionsCatalog = async (req, res) => {
 
 exports.deleteUser = async (req, res) => {
     try {
-        const user = await User.findByIdAndDelete(req.params.id);
+        const user = await User.findById(req.params.id);
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
+
+        // Only ADMINISTRATIVE can delete ADMINISTRATIVE users
+        if (user.role === 'ADMINISTRATIVE' && req.user?.role !== 'ADMINISTRATIVE') {
+            return res.status(403).json({ message: 'Cannot delete ADMINISTRATIVE users' });
+        }
+
+        await User.findByIdAndDelete(req.params.id);
         res.json({ message: 'User deleted successfully' });
 
         // Log action
