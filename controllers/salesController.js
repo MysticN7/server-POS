@@ -636,13 +636,14 @@ exports.getPaymentHistory = async (req, res) => {
 };
 
 // Update payment amount
+// Update payment amount
 exports.updatePayment = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
         const { id } = req.params;
-        const { amount, note, payment_method } = req.body;
+        const { amount, note, payment_method, invoice_number } = req.body; // Added invoice_number
         const user = req.user;
 
         // PERMISSION CHECK
@@ -658,58 +659,100 @@ exports.updatePayment = async (req, res) => {
             return res.status(404).json({ message: 'Payment record not found' });
         }
 
-        const invoice = await Invoice.findById(payment.invoice).session(session);
-        if (!invoice) {
+        // Find Current Invoice
+        const currentInvoice = await Invoice.findById(payment.invoice).session(session);
+        if (!currentInvoice) {
             await session.abortTransaction();
             return res.status(404).json({ message: 'Associated invoice not found' });
+        }
+
+        // Check if Invoice is being changed
+        let targetInvoice = currentInvoice;
+        let isInvoiceChanged = false;
+
+        if (invoice_number && invoice_number !== currentInvoice.invoiceNumber) {
+            // User wants to move payment to another invoice
+            const newInvoice = await Invoice.findOne({ invoiceNumber: invoice_number }).session(session);
+            if (!newInvoice) {
+                await session.abortTransaction();
+                return res.status(404).json({ message: `Invoice #${invoice_number} not found` });
+            }
+            targetInvoice = newInvoice;
+            isInvoiceChanged = true;
         }
 
         const oldAmount = payment.amount;
         const newAmount = parseFloat(amount);
 
-        if (isNaN(newAmount) || newAmount < 0) { // Changed to allow 0 if needed, but usually payment > 0
-            await session.abortTransaction();
-            return res.status(400).json({ message: 'Invalid amount' });
-        }
-
-        if (newAmount === 0) {
-            // If 0, maybe they meant to delete? But let's just reject or allow. 
-            // Let's assume > 0 for now.
+        if (isNaN(newAmount) || newAmount <= 0) {
             await session.abortTransaction();
             return res.status(400).json({ message: 'Amount must be greater than 0' });
         }
 
-        // Adjust Invoice Paid Amount
-        // New Paid = Old Paid - Old Payment + New Payment
-        const amountDiff = newAmount - oldAmount;
-        invoice.paidAmount += amountDiff;
+        if (isInvoiceChanged) {
+            // 1. Revert Old Invoice
+            currentInvoice.paidAmount -= oldAmount;
+            const currentFinal = currentInvoice.totalAmount - (currentInvoice.discount || 0);
+            currentInvoice.dueAmount = currentFinal - currentInvoice.paidAmount;
 
-        // Recalculate Due
-        const finalAmount = invoice.totalAmount - (invoice.discount || 0);
-        invoice.dueAmount = finalAmount - invoice.paidAmount;
+            // Update Old Invoice Status
+            if (currentInvoice.paidAmount >= currentFinal) currentInvoice.status = 'PAID';
+            else if (currentInvoice.paidAmount > 0) currentInvoice.status = 'PARTIAL';
+            else currentInvoice.status = 'PENDING';
 
-        // Update Status
-        if (invoice.paidAmount >= finalAmount) {
-            invoice.status = 'PAID';
-        } else if (invoice.paidAmount > 0) {
-            invoice.status = 'PARTIAL';
+            await currentInvoice.save({ session });
+
+            // 2. Apply to New Invoice (targetInvoice)
+            targetInvoice.paidAmount += newAmount; // Add NEW amount to new invoice
+            const targetFinal = targetInvoice.totalAmount - (targetInvoice.discount || 0);
+            targetInvoice.dueAmount = targetFinal - targetInvoice.paidAmount;
+
+            // Update New Invoice Status
+            if (targetInvoice.paidAmount >= targetFinal) targetInvoice.status = 'PAID';
+            else if (targetInvoice.paidAmount > 0) targetInvoice.status = 'PARTIAL';
+            else targetInvoice.status = 'PENDING';
+
+            await targetInvoice.save({ session });
+
+            // Update Payment Record
+            payment.invoice = targetInvoice._id;
+
         } else {
-            invoice.status = 'PENDING';
+            // Same Invoice - Just adjust diff
+            const amountDiff = newAmount - oldAmount;
+            targetInvoice.paidAmount += amountDiff;
+
+            const finalAmount = targetInvoice.totalAmount - (targetInvoice.discount || 0);
+            targetInvoice.dueAmount = finalAmount - targetInvoice.paidAmount;
+
+            // Update Status
+            if (targetInvoice.paidAmount >= finalAmount) {
+                targetInvoice.status = 'PAID';
+            } else if (targetInvoice.paidAmount > 0) {
+                targetInvoice.status = 'PARTIAL';
+            } else {
+                targetInvoice.status = 'PENDING';
+            }
+
+            await targetInvoice.save({ session });
         }
 
-        // Update Payment Record
+        // Update Payment Record fields
         payment.amount = newAmount;
         if (note !== undefined) payment.note = note;
         if (payment_method) payment.paymentMethod = payment_method;
 
-        await invoice.save({ session });
         await payment.save({ session });
 
         await session.commitTransaction();
 
-        logAction('UPDATE_PAYMENT', `Updated payment for invoice ${invoice.invoiceNumber}: ${oldAmount} -> ${newAmount}`, user.id, payment._id, 'PaymentHistory', req.ip);
+        const logMsg = isInvoiceChanged
+            ? `Moved payment from Inv #${currentInvoice.invoiceNumber} to #${targetInvoice.invoiceNumber} & updated: ${oldAmount} -> ${newAmount}`
+            : `Updated payment for invoice ${targetInvoice.invoiceNumber}: ${oldAmount} -> ${newAmount}`;
 
-        res.json({ message: 'Payment updated successfully', payment, invoice });
+        logAction('UPDATE_PAYMENT', logMsg, user.id, payment._id, 'PaymentHistory', req.ip);
+
+        res.json({ message: 'Payment updated successfully', payment, invoice: targetInvoice });
 
     } catch (err) {
         await session.abortTransaction();
