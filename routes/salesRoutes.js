@@ -12,4 +12,6 @@ router.put('/:id', auth, salesController.updateSale);
 router.delete('/:id', auth, salesController.deleteSale);
 router.post('/:id/payment', auth, salesController.addPayment);
 
+router.get('/payments/history', auth, salesController.getPaymentHistory);
+
 module.exports = router;

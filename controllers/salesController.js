@@ -615,3 +615,25 @@ exports.addPayment = async (req, res) => {
         session.endSession();
     }
 };
+
+// Get recent payment history
+exports.getPaymentHistory = async (req, res) => {
+    try {
+        const history = await PaymentHistory.find()
+            .sort({ createdAt: -1 })
+            .limit(50)
+            .populate({
+                path: 'invoice',
+                select: 'invoiceNumber customerName',
+                populate: {
+                    path: 'Customer',
+                    select: 'name phone'
+                }
+            });
+
+        res.json(history);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server Error' });
+    }
+};
