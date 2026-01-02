@@ -640,7 +640,7 @@ exports.updatePayment = async (req, res) => {
 
     try {
         const { id } = req.params;
-        const { amount, note, payment_method, invoice_number } = req.body; // Added invoice_number
+        const { amount, note, payment_method, invoice_number } = req.body;
         const user = req.user;
 
         // PERMISSION CHECK
@@ -688,9 +688,11 @@ exports.updatePayment = async (req, res) => {
 
         if (isInvoiceChanged) {
             // 1. Revert Old Invoice
-            currentInvoice.paidAmount -= oldAmount;
+            // Ensure paidAmount doesn't go below 0
+            currentInvoice.paidAmount = Math.max(0, currentInvoice.paidAmount - oldAmount);
+
             const currentFinal = currentInvoice.totalAmount - (currentInvoice.discount || 0);
-            currentInvoice.dueAmount = currentFinal - currentInvoice.paidAmount;
+            currentInvoice.dueAmount = Math.max(0, currentFinal - currentInvoice.paidAmount);
 
             // Update Old Invoice Status
             if (currentInvoice.paidAmount >= currentFinal) currentInvoice.status = 'PAID';
@@ -702,7 +704,7 @@ exports.updatePayment = async (req, res) => {
             // 2. Apply to New Invoice (targetInvoice)
             targetInvoice.paidAmount += newAmount; // Add NEW amount to new invoice
             const targetFinal = targetInvoice.totalAmount - (targetInvoice.discount || 0);
-            targetInvoice.dueAmount = targetFinal - targetInvoice.paidAmount;
+            targetInvoice.dueAmount = Math.max(0, targetFinal - targetInvoice.paidAmount);
 
             // Update New Invoice Status
             if (targetInvoice.paidAmount >= targetFinal) targetInvoice.status = 'PAID';
@@ -717,10 +719,13 @@ exports.updatePayment = async (req, res) => {
         } else {
             // Same Invoice - Just adjust diff
             const amountDiff = newAmount - oldAmount;
-            targetInvoice.paidAmount += amountDiff;
+
+            // If amountDiff is negative (newAmount < oldAmount), paidAmount decreases.
+            // We ensure it doesn't drop below zero to avoid schema validation errors.
+            targetInvoice.paidAmount = Math.max(0, targetInvoice.paidAmount + amountDiff);
 
             const finalAmount = targetInvoice.totalAmount - (targetInvoice.discount || 0);
-            targetInvoice.dueAmount = finalAmount - targetInvoice.paidAmount;
+            targetInvoice.dueAmount = Math.max(0, finalAmount - targetInvoice.paidAmount);
 
             // Update Status
             if (targetInvoice.paidAmount >= finalAmount) {
@@ -754,7 +759,9 @@ exports.updatePayment = async (req, res) => {
     } catch (err) {
         await session.abortTransaction();
         console.error('Update Payment Error:', err);
-        res.status(500).json({ message: 'Server Error' });
+        // Return actual error message for debugging if it's a validation error
+        const errorMessage = err.name === 'ValidationError' ? err.message : 'Server Error';
+        res.status(500).json({ message: errorMessage, error: err.toString() });
     } finally {
         session.endSession();
     }
@@ -786,11 +793,12 @@ exports.deletePayment = async (req, res) => {
 
         if (invoice) {
             // Revert Invoice Paid Amount
-            invoice.paidAmount -= payment.amount;
+            // Ensure paidAmount doesn't go below 0
+            invoice.paidAmount = Math.max(0, invoice.paidAmount - payment.amount);
 
             // Recalculate Due
             const finalAmount = invoice.totalAmount - (invoice.discount || 0);
-            invoice.dueAmount = finalAmount - invoice.paidAmount;
+            invoice.dueAmount = Math.max(0, finalAmount - invoice.paidAmount);
 
             // Update Status
             if (invoice.paidAmount >= finalAmount) {
@@ -815,7 +823,9 @@ exports.deletePayment = async (req, res) => {
     } catch (err) {
         await session.abortTransaction();
         console.error('Delete Payment Error:', err);
-        res.status(500).json({ message: 'Server Error' });
+        // Return actual error message for debugging
+        const errorMessage = err.name === 'ValidationError' ? err.message : 'Server Error';
+        res.status(500).json({ message: errorMessage, error: err.toString() });
     } finally {
         session.endSession();
     }
