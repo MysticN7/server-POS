@@ -18,8 +18,10 @@ exports.PERMISSIONS_LIST = [
 const PERMISSIONS_LIST = exports.PERMISSIONS_LIST;
 
 const ensurePermissions = (role, permissions = []) => {
-    // ADMINISTRATIVE and ADMIN get all permissions
-    if (role === 'ADMINISTRATIVE' || role === 'ADMIN') return PERMISSIONS_LIST;
+    // ADMINISTRATIVE gets all permissions
+    if (role === 'ADMINISTRATIVE') return PERMISSIONS_LIST;
+
+    // For all other roles (including ADMIN), validate against list
     if (!Array.isArray(permissions)) return [];
     return permissions.filter((perm) => PERMISSIONS_LIST.includes(perm));
 };
