@@ -562,26 +562,23 @@ exports.deleteSale = async (req, res) => {
 };
 
 // Add payment to invoice
+// Add payment to invoice
 exports.addPayment = async (req, res) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
     try {
-        const sale = await Invoice.findById(req.params.id).session(session);
+        const sale = await Invoice.findById(req.params.id);
 
         if (!sale) {
-            await session.abortTransaction();
             return res.status(404).json({ message: 'Invoice not found' });
         }
 
         const { amount, payment_method, note } = req.body;
 
         if (!amount || amount <= 0) {
-            await session.abortTransaction();
             return res.status(400).json({ message: 'Invalid payment amount' });
         }
 
         // Create payment history record
+        console.log('Creating PaymentHistory record...');
         const payment = new PaymentHistory({
             invoice: sale._id,
             amount: amount,
@@ -589,7 +586,8 @@ exports.addPayment = async (req, res) => {
             note: note
         });
 
-        await payment.save({ session });
+        await payment.save();
+        console.log('PaymentHistory saved:', payment._id);
 
         // Update invoice paid amount
         sale.paidAmount += amount;
@@ -603,22 +601,20 @@ exports.addPayment = async (req, res) => {
             sale.status = 'PARTIAL';
         }
 
-        await sale.save({ session });
-        await session.commitTransaction();
+        await sale.save();
+        console.log('Payment complete. Invoice updated.');
 
         res.json({ message: 'Payment added successfully', invoice: sale });
     } catch (err) {
-        await session.abortTransaction();
-        console.error(err);
+        console.error('Payment Error:', err);
         res.status(500).json({ message: 'Server Error' });
-    } finally {
-        session.endSession();
     }
 };
 
 // Get recent payment history
 exports.getPaymentHistory = async (req, res) => {
     try {
+        console.log('Fetching payment history...');
         const history = await PaymentHistory.find()
             .sort({ createdAt: -1 })
             .limit(50)
@@ -631,9 +627,156 @@ exports.getPaymentHistory = async (req, res) => {
                 }
             });
 
+        console.log(`Found ${history.length} history records.`);
         res.json(history);
     } catch (err) {
-        console.error(err);
+        console.error('Fetch History Error:', err);
         res.status(500).json({ message: 'Server Error' });
+    }
+};
+
+// Update payment amount
+exports.updatePayment = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const { id } = req.params;
+        const { amount, note, payment_method } = req.body;
+        const user = req.user;
+
+        // PERMISSION CHECK
+        const canEdit = user.role === 'ADMIN' || (user.permissions && user.permissions.includes('EDIT_DUE'));
+        if (!canEdit) {
+            await session.abortTransaction();
+            return res.status(403).json({ message: 'Access denied. You do not have permission to edit payments.' });
+        }
+
+        const payment = await PaymentHistory.findById(id).session(session);
+        if (!payment) {
+            await session.abortTransaction();
+            return res.status(404).json({ message: 'Payment record not found' });
+        }
+
+        const invoice = await Invoice.findById(payment.invoice).session(session);
+        if (!invoice) {
+            await session.abortTransaction();
+            return res.status(404).json({ message: 'Associated invoice not found' });
+        }
+
+        const oldAmount = payment.amount;
+        const newAmount = parseFloat(amount);
+
+        if (isNaN(newAmount) || newAmount < 0) { // Changed to allow 0 if needed, but usually payment > 0
+            await session.abortTransaction();
+            return res.status(400).json({ message: 'Invalid amount' });
+        }
+
+        if (newAmount === 0) {
+            // If 0, maybe they meant to delete? But let's just reject or allow. 
+            // Let's assume > 0 for now.
+            await session.abortTransaction();
+            return res.status(400).json({ message: 'Amount must be greater than 0' });
+        }
+
+        // Adjust Invoice Paid Amount
+        // New Paid = Old Paid - Old Payment + New Payment
+        const amountDiff = newAmount - oldAmount;
+        invoice.paidAmount += amountDiff;
+
+        // Recalculate Due
+        const finalAmount = invoice.totalAmount - (invoice.discount || 0);
+        invoice.dueAmount = finalAmount - invoice.paidAmount;
+
+        // Update Status
+        if (invoice.paidAmount >= finalAmount) {
+            invoice.status = 'PAID';
+        } else if (invoice.paidAmount > 0) {
+            invoice.status = 'PARTIAL';
+        } else {
+            invoice.status = 'PENDING';
+        }
+
+        // Update Payment Record
+        payment.amount = newAmount;
+        if (note !== undefined) payment.note = note;
+        if (payment_method) payment.paymentMethod = payment_method;
+
+        await invoice.save({ session });
+        await payment.save({ session });
+
+        await session.commitTransaction();
+
+        logAction('UPDATE_PAYMENT', `Updated payment for invoice ${invoice.invoiceNumber}: ${oldAmount} -> ${newAmount}`, user.id, payment._id, 'PaymentHistory', req.ip);
+
+        res.json({ message: 'Payment updated successfully', payment, invoice });
+
+    } catch (err) {
+        await session.abortTransaction();
+        console.error('Update Payment Error:', err);
+        res.status(500).json({ message: 'Server Error' });
+    } finally {
+        session.endSession();
+    }
+};
+
+// Delete payment
+exports.deletePayment = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const { id } = req.params;
+        const user = req.user;
+
+        // PERMISSION CHECK
+        const canDelete = user.role === 'ADMIN' || (user.permissions && user.permissions.includes('DELETE_DUE'));
+        if (!canDelete) {
+            await session.abortTransaction();
+            return res.status(403).json({ message: 'Access denied. You do not have permission to delete payments.' });
+        }
+
+        const payment = await PaymentHistory.findById(id).session(session);
+        if (!payment) {
+            await session.abortTransaction();
+            return res.status(404).json({ message: 'Payment record not found' });
+        }
+
+        const invoice = await Invoice.findById(payment.invoice).session(session);
+
+        if (invoice) {
+            // Revert Invoice Paid Amount
+            invoice.paidAmount -= payment.amount;
+
+            // Recalculate Due
+            const finalAmount = invoice.totalAmount - (invoice.discount || 0);
+            invoice.dueAmount = finalAmount - invoice.paidAmount;
+
+            // Update Status
+            if (invoice.paidAmount >= finalAmount) {
+                invoice.status = 'PAID';
+            } else if (invoice.paidAmount > 0) {
+                invoice.status = 'PARTIAL';
+            } else {
+                invoice.status = 'PENDING';
+            }
+
+            await invoice.save({ session });
+        }
+
+        await PaymentHistory.findByIdAndDelete(id).session(session);
+
+        await session.commitTransaction();
+
+        logAction('DELETE_PAYMENT', `Deleted payment of ${payment.amount} for invoice ${invoice ? invoice.invoiceNumber : 'Unknown'}`, user.id, payment._id, 'PaymentHistory', req.ip);
+
+        res.json({ message: 'Payment deleted successfully', invoice });
+
+    } catch (err) {
+        await session.abortTransaction();
+        console.error('Delete Payment Error:', err);
+        res.status(500).json({ message: 'Server Error' });
+    } finally {
+        session.endSession();
     }
 };
