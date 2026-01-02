@@ -602,7 +602,6 @@ exports.addPayment = async (req, res) => {
         }
 
         await sale.save();
-        console.log('Payment complete. Invoice updated.');
 
         res.json({ message: 'Payment added successfully', invoice: sale });
     } catch (err) {
@@ -614,7 +613,6 @@ exports.addPayment = async (req, res) => {
 // Get recent payment history
 exports.getPaymentHistory = async (req, res) => {
     try {
-        console.log('Fetching payment history...');
         const history = await PaymentHistory.find()
             .sort({ createdAt: -1 })
             .limit(50)
@@ -627,7 +625,6 @@ exports.getPaymentHistory = async (req, res) => {
                 }
             });
 
-        console.log(`Found ${history.length} history records.`);
         res.json(history);
     } catch (err) {
         console.error('Fetch History Error:', err);

@@ -124,22 +124,18 @@ exports.updateProduct = async (req, res) => {
 exports.deleteProduct = async (req, res) => {
     try {
         const { id } = req.params;
-        console.log('Backend: Deleting product with ID:', id);
 
         const product = await Product.findById(id);
         if (!product) {
-            console.log('Backend: Product not found');
             return res.status(404).json({ message: 'Product not found' });
         }
 
         // Delete image from Cloudinary if it exists
         if (product.cloudinaryId) {
             await deleteImage(product.cloudinaryId);
-            console.log('Backend: Deleted associated image from Cloudinary');
         }
 
         await product.deleteOne();
-        console.log('Backend: Product deleted successfully');
         res.json({ message: 'Product deleted' });
 
         // Log action
