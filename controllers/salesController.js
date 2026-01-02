@@ -330,7 +330,7 @@ exports.getSalesByDateRange = async (req, res) => {
 
         let salesQuery = Invoice.find(query);
 
-        // Customer search
+        // Search functionality
         if (search) {
             const customers = await Customer.find({
                 $or: [
@@ -340,7 +340,13 @@ exports.getSalesByDateRange = async (req, res) => {
             }).select('_id');
 
             const customerIds = customers.map(c => c._id);
-            query.customer = { $in: customerIds };
+
+            // Combine with existing query using $and to ensure status/date filters apply
+            // But search conditions themselves are OR (InvoiceNumber OR CustomerName OR CustomerPhone)
+            query.$or = [
+                { customer: { $in: customerIds } },
+                { invoiceNumber: { $regex: search, $options: 'i' } }
+            ];
         }
 
         const sales = await Invoice.find(query)
