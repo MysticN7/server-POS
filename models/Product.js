@@ -4,17 +4,20 @@ const productSchema = new mongoose.Schema({
     name: {
         type: String,
         required: true,
-        trim: true
+        trim: true,
+        uppercase: true  // Automatically convert to uppercase
     },
     sku: {
         type: String,
         unique: true,
         sparse: true,
-        trim: true
+        trim: true,
+        uppercase: true  // SKU also uppercase
     },
     category: {
         type: String,
-        required: true
+        required: true,
+        uppercase: true  // Category also uppercase
     },
     price: {
         type: Number,
