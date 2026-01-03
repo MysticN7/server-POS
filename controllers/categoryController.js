@@ -33,3 +33,21 @@ exports.deleteCategory = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+exports.updateCategory = async (req, res) => {
+    try {
+        const { name } = req.body;
+        const category = await Category.findByIdAndUpdate(
+            req.params.id,
+            { name },
+            { new: true, runValidators: true }
+        );
+        if (!category) {
+            return res.status(404).json({ message: 'Category not found' });
+        }
+        res.json(category);
+    } catch (error) {
+        console.error('Error updating category:', error);
+        res.status(400).json({ message: error.message });
+    }
+};

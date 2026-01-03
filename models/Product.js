@@ -16,8 +16,8 @@ const productSchema = new mongoose.Schema({
     },
     category: {
         type: String,
-        required: true,
-        uppercase: true  // Category also uppercase
+        uppercase: true,  // Category uppercase
+        default: ''  // Optional - empty string if not set
     },
     price: {
         type: Number,
