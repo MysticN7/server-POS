@@ -5,7 +5,8 @@ const categorySchema = new mongoose.Schema({
         type: String,
         required: true,
         unique: true,
-        trim: true
+        trim: true,
+        uppercase: true  // Ensure all category names are uppercase
     }
 }, {
     timestamps: true
