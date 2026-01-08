@@ -290,9 +290,22 @@ exports.createSale = async (req, res) => {
 
         await invoice.save({ session });
 
-        // Update invoice number to be sequential and padded (e.g., 01, 02 ... 10)
-        const count = await Invoice.countDocuments();
-        invoice.invoiceNumber = String(count).padStart(2, '0');
+        // Find highest invoice number to ensure sequential numbering
+        // This avoids gaps caused by cancelled invoices being counted
+        const lastInvoice = await Invoice.findOne({ status: { $ne: 'CANCELLED' } })
+            .select('invoiceNumber')
+            .sort({ createdAt: -1 })
+            .session(session);
+
+        let nextNumber = 1;
+        if (lastInvoice && lastInvoice.invoiceNumber) {
+            // Handle both numeric and TEMP-* invoice numbers
+            const lastNum = parseInt(lastInvoice.invoiceNumber, 10);
+            if (!isNaN(lastNum)) {
+                nextNumber = lastNum + 1;
+            }
+        }
+        invoice.invoiceNumber = String(nextNumber).padStart(2, '0');
         await invoice.save({ session });
 
         // Create Invoice Items
