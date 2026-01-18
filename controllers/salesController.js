@@ -1,3 +1,4 @@
+sai
 const Invoice = require('../models/Invoice');
 const InvoiceItem = require('../models/InvoiceItem');
 const Customer = require('../models/Customer');
@@ -548,4 +549,313 @@ exports.updateSale = async (req, res) => {
         } else if (sale.paidAmount > 0) {
             sale.status = 'PARTIAL';
         } else {
-   
+            sale.status = 'PENDING';
+        }
+
+        await sale.save({ session });
+        await session.commitTransaction();
+
+        res.json({ message: 'Invoice updated successfully', invoice: sale });
+    } catch (err) {
+        await session.abortTransaction();
+        console.error(err);
+        res.status(500).json({ message: 'Server Error' });
+    } finally {
+        session.endSession();
+    }
+};
+
+// Soft delete sale
+exports.deleteSale = async (req, res) => {
+    try {
+        // PERMISSION CHECK
+        if (req.user.role !== 'ADMINISTRATIVE' && (!req.user.permissions || !req.user.permissions.includes('DELETE_SALES'))) {
+            return res.status(403).json({ message: 'Access denied. You do not have permission to delete invoices.' });
+        }
+
+        const sale = await Invoice.findById(req.params.id);
+
+        if (!sale) {
+            return res.status(404).json({ message: 'Invoice not found' });
+        }
+
+        sale.status = 'CANCELLED';
+        await sale.save();
+
+        res.json({ message: 'Invoice cancelled successfully' });
+
+        // Log action
+        logAction('CANCEL_SALE', `Cancelled invoice: ${sale.invoiceNumber}`, req.user.id, sale._id, 'Invoice', req.ip);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server Error' });
+    }
+};
+
+// Add payment to invoice
+exports.addPayment = async (req, res) => {
+    try {
+        const sale = await Invoice.findById(req.params.id);
+
+        if (!sale) {
+            return res.status(404).json({ message: 'Invoice not found' });
+        }
+
+        const { amount, payment_method, note } = req.body;
+
+        if (!amount || amount <= 0) {
+            return res.status(400).json({ message: 'Invalid payment amount' });
+        }
+
+        // Create payment history record
+        console.log('Creating PaymentHistory record...');
+        const payment = new PaymentHistory({
+            invoice: sale._id,
+            amount: amount,
+            paymentMethod: payment_method || sale.paymentMethod,
+            note: note
+        });
+
+        await payment.save();
+        console.log('PaymentHistory saved:', payment._id);
+
+        // Update invoice paid amount
+        sale.paidAmount += amount;
+        sale.dueAmount = (sale.totalAmount - sale.discount) - sale.paidAmount;
+
+        // Update status
+        const finalAmount = sale.totalAmount - (sale.discount || 0);
+        if (sale.paidAmount >= finalAmount) {
+            sale.status = 'PAID';
+        } else if (sale.paidAmount > 0) {
+            sale.status = 'PARTIAL';
+        }
+
+        await sale.save();
+
+        res.json({ message: 'Payment added successfully', invoice: sale });
+    } catch (err) {
+        console.error('Payment Error:', err);
+        res.status(500).json({ message: 'Server Error' });
+    }
+};
+
+// Get recent payment history
+exports.getPaymentHistory = async (req, res) => {
+    try {
+        const history = await PaymentHistory.find()
+            .sort({ createdAt: -1 })
+            .limit(50)
+            .populate({
+                path: 'invoice',
+                select: 'invoiceNumber customerName',
+                populate: {
+                    path: 'customer',
+                    select: 'name phone'
+                }
+            });
+
+        res.json(history);
+    } catch (err) {
+        console.error('Fetch History Error:', err);
+        res.status(500).json({ message: 'Server Error' });
+    }
+};
+
+// Update payment amount
+exports.updatePayment = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const { id } = req.params;
+        const { amount, note, payment_method, invoice_number } = req.body;
+        const user = req.user;
+
+        // PERMISSION CHECK
+        const canEdit = user.role === 'ADMINISTRATIVE' || (user.permissions && user.permissions.includes('EDIT_DUE'));
+        if (!canEdit) {
+            await session.abortTransaction();
+            return res.status(403).json({ message: 'Access denied. You do not have permission to edit payments.' });
+        }
+
+        const payment = await PaymentHistory.findById(id).session(session);
+        if (!payment) {
+            await session.abortTransaction();
+            return res.status(404).json({ message: 'Payment record not found' });
+        }
+
+        // Find Current Invoice
+        const currentInvoice = await Invoice.findById(payment.invoice).session(session);
+        if (!currentInvoice) {
+            await session.abortTransaction();
+            return res.status(404).json({ message: 'Associated invoice not found' });
+        }
+
+        // Check if Invoice is being changed
+        let targetInvoice = currentInvoice;
+        let isInvoiceChanged = false;
+
+        if (invoice_number && invoice_number !== currentInvoice.invoiceNumber) {
+            // User wants to move payment to another invoice
+            const newInvoice = await Invoice.findOne({ invoiceNumber: invoice_number }).session(session);
+            if (!newInvoice) {
+                await session.abortTransaction();
+                return res.status(404).json({ message: `Invoice #${invoice_number} not found` });
+            }
+            targetInvoice = newInvoice;
+            isInvoiceChanged = true;
+        }
+
+        const oldAmount = payment.amount;
+        const newAmount = parseFloat(amount);
+
+        if (isNaN(newAmount) || newAmount <= 0) {
+            await session.abortTransaction();
+            return res.status(400).json({ message: 'Amount must be greater than 0' });
+        }
+
+        if (isInvoiceChanged) {
+            // 1. Revert Old Invoice
+            // Ensure paidAmount doesn't go below 0
+            currentInvoice.paidAmount = Math.max(0, currentInvoice.paidAmount - oldAmount);
+
+            const currentFinal = currentInvoice.totalAmount - (currentInvoice.discount || 0);
+            currentInvoice.dueAmount = Math.max(0, currentFinal - currentInvoice.paidAmount);
+
+            // Update Old Invoice Status
+            if (currentInvoice.paidAmount >= currentFinal) currentInvoice.status = 'PAID';
+            else if (currentInvoice.paidAmount > 0) currentInvoice.status = 'PARTIAL';
+            else currentInvoice.status = 'PENDING';
+
+            await currentInvoice.save({ session });
+
+            // 2. Apply to New Invoice (targetInvoice)
+            targetInvoice.paidAmount += newAmount; // Add NEW amount to new invoice
+            const targetFinal = targetInvoice.totalAmount - (targetInvoice.discount || 0);
+            targetInvoice.dueAmount = Math.max(0, targetFinal - targetInvoice.paidAmount);
+
+            // Update New Invoice Status
+            if (targetInvoice.paidAmount >= targetFinal) targetInvoice.status = 'PAID';
+            else if (targetInvoice.paidAmount > 0) targetInvoice.status = 'PARTIAL';
+            else targetInvoice.status = 'PENDING';
+
+            await targetInvoice.save({ session });
+
+            // Update Payment Record
+            payment.invoice = targetInvoice._id;
+
+        } else {
+            // Same Invoice - Just adjust diff
+            const amountDiff = newAmount - oldAmount;
+
+            // If amountDiff is negative (newAmount < oldAmount), paidAmount decreases.
+            // We ensure it doesn't drop below zero to avoid schema validation errors.
+            targetInvoice.paidAmount = Math.max(0, targetInvoice.paidAmount + amountDiff);
+
+            const finalAmount = targetInvoice.totalAmount - (targetInvoice.discount || 0);
+            targetInvoice.dueAmount = Math.max(0, finalAmount - targetInvoice.paidAmount);
+
+            // Update Status
+            if (targetInvoice.paidAmount >= finalAmount) {
+                targetInvoice.status = 'PAID';
+            } else if (targetInvoice.paidAmount > 0) {
+                targetInvoice.status = 'PARTIAL';
+            } else {
+                targetInvoice.status = 'PENDING';
+            }
+
+            await targetInvoice.save({ session });
+        }
+
+        // Update Payment Record fields
+        payment.amount = newAmount;
+        if (note !== undefined) payment.note = note;
+        if (payment_method) payment.paymentMethod = payment_method;
+
+        await payment.save({ session });
+
+        await session.commitTransaction();
+
+        const logMsg = isInvoiceChanged
+            ? `Moved payment from Inv #${currentInvoice.invoiceNumber} to #${targetInvoice.invoiceNumber} & updated: ${oldAmount} -> ${newAmount}`
+            : `Updated payment for invoice ${targetInvoice.invoiceNumber}: ${oldAmount} -> ${newAmount}`;
+
+        logAction('UPDATE_PAYMENT', logMsg, user.id, payment._id, 'PaymentHistory', req.ip);
+
+        res.json({ message: 'Payment updated successfully', payment, invoice: targetInvoice });
+
+    } catch (err) {
+        await session.abortTransaction();
+        console.error('Update Payment Error:', err);
+        // Return actual error message for debugging if it's a validation error
+        const errorMessage = err.name === 'ValidationError' ? err.message : 'Server Error';
+        res.status(500).json({ message: errorMessage, error: err.toString() });
+    } finally {
+        session.endSession();
+    }
+};
+
+// Delete payment
+exports.deletePayment = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const { id } = req.params;
+        const user = req.user;
+
+        // PERMISSION CHECK
+        const canDelete = user.role === 'ADMINISTRATIVE' || (user.permissions && user.permissions.includes('DELETE_DUE'));
+        if (!canDelete) {
+            await session.abortTransaction();
+            return res.status(403).json({ message: 'Access denied. You do not have permission to delete payments.' });
+        }
+
+        const payment = await PaymentHistory.findById(id).session(session);
+        if (!payment) {
+            await session.abortTransaction();
+            return res.status(404).json({ message: 'Payment record not found' });
+        }
+
+        const invoice = await Invoice.findById(payment.invoice).session(session);
+
+        if (invoice) {
+            // Revert Invoice Paid Amount
+            // Ensure paidAmount doesn't go below 0
+            invoice.paidAmount = Math.max(0, invoice.paidAmount - payment.amount);
+
+            // Recalculate Due
+            const finalAmount = invoice.totalAmount - (invoice.discount || 0);
+            invoice.dueAmount = Math.max(0, finalAmount - invoice.paidAmount);
+
+            // Update Status
+            if (invoice.paidAmount >= finalAmount) {
+                invoice.status = 'PAID';
+            } else if (invoice.paidAmount > 0) {
+                invoice.status = 'PARTIAL';
+            } else {
+                invoice.status = 'PENDING';
+            }
+
+            await invoice.save({ session });
+        }
+
+        await PaymentHistory.findByIdAndDelete(id).session(session);
+
+        await session.commitTransaction();
+
+        logAction('DELETE_PAYMENT', `Deleted payment of ${payment.amount} for invoice ${invoice ? invoice.invoiceNumber : 'Unknown'}`, user.id, payment._id, 'PaymentHistory', req.ip);
+
+        res.json({ message: 'Payment deleted successfully', invoice });
+
+    } catch (err) {
+        await session.abortTransaction();
+        console.error('Delete Payment Error:', err);
+        // Return actual error message for debugging
+        const errorMessage = err.name === 'ValidationError' ? err.message : 'Server Error';
+        res.status(500).json({ message: errorMessage, error: err.toString() });
+    } finally {
+        session.endSession();
+    }
+};
