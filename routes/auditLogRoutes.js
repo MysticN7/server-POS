@@ -22,7 +22,9 @@ const administrativeOnly = (req, res, next) => {
 };
 
 router.get('/', auth, adminAuth, auditLogController.getLogs);
+router.delete('/my-logs', auth, administrativeOnly, auditLogController.deleteMyLogs);
 router.delete('/:id', auth, administrativeOnly, auditLogController.deleteLog);
 router.delete('/', auth, administrativeOnly, auditLogController.deleteAllLogs);
 
 module.exports = router;
+

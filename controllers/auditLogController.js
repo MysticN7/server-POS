@@ -82,3 +82,27 @@ exports.deleteAllLogs = async (req, res) => {
         res.status(500).json({ message: 'Server Error' });
     }
 };
+
+// Delete current user's audit logs with optional date filter (ADMINISTRATIVE only)
+exports.deleteMyLogs = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        const query = { performedBy: req.user.id };
+
+        // Add date filter if provided
+        if (startDate || endDate) {
+            query.createdAt = {};
+            if (startDate) query.createdAt.$gte = new Date(startDate);
+            if (endDate) query.createdAt.$lte = new Date(new Date(endDate).setHours(23, 59, 59, 999));
+        }
+
+        const result = await AuditLog.deleteMany(query);
+        res.json({
+            message: `Deleted ${result.deletedCount} audit log(s) successfully`,
+            deletedCount: result.deletedCount
+        });
+    } catch (error) {
+        console.error('Error deleting user audit logs:', error);
+        res.status(500).json({ message: 'Server Error' });
+    }
+};
