@@ -274,9 +274,35 @@ exports.createSale = async (req, res) => {
 
         const final_amount = total_amount - (discount || 0);
 
+        // --- SEQUENTIAL INVOICE NUMBER LOGIC (01, 02, 03...) ---
+        // 1. Find the highest existing invoice number that is purely numeric
+        const lastInvoice = await Invoice.findOne({
+            invoiceNumber: { $regex: /^\d+$/ }
+        })
+            .sort({ createdAt: -1 })
+            .collation({ locale: "en_US", numericOrdering: true }) // Ensures "10" > "2"
+            .session(session);
+
+        let nextNumber = 1;
+        if (lastInvoice && lastInvoice.invoiceNumber) {
+            const lastNum = parseInt(lastInvoice.invoiceNumber, 10);
+            if (!isNaN(lastNum)) {
+                nextNumber = lastNum + 1;
+            }
+        }
+
+        // Format as "01", "02", ... "10"
+        let uniqueInvoiceNumber = String(nextNumber).padStart(2, '0');
+
+        // Safety Check: If "02" exists (rare race condition), append timestamp to save the sale anyway
+        const checkCollision = await Invoice.findOne({ invoiceNumber: uniqueInvoiceNumber }).session(session);
+        if (checkCollision) {
+            uniqueInvoiceNumber = `${uniqueInvoiceNumber}-${Date.now().toString().slice(-4)}`;
+        }
+
         // Create Invoice
         const invoice = new Invoice({
-            invoiceNumber: `TEMP-${Date.now()}`,
+            invoiceNumber: uniqueInvoiceNumber,
             customer: resolvedCustomerId,
             totalAmount: total_amount,
             discount: discount || 0,
@@ -288,24 +314,6 @@ exports.createSale = async (req, res) => {
             createdBy: user_id
         });
 
-        await invoice.save({ session });
-
-        // Find highest invoice number to ensure sequential numbering
-        // This avoids gaps caused by cancelled invoices being counted
-        const lastInvoice = await Invoice.findOne({ status: { $ne: 'CANCELLED' } })
-            .select('invoiceNumber')
-            .sort({ createdAt: -1 })
-            .session(session);
-
-        let nextNumber = 1;
-        if (lastInvoice && lastInvoice.invoiceNumber) {
-            // Handle both numeric and TEMP-* invoice numbers
-            const lastNum = parseInt(lastInvoice.invoiceNumber, 10);
-            if (!isNaN(lastNum)) {
-                nextNumber = lastNum + 1;
-            }
-        }
-        invoice.invoiceNumber = String(nextNumber).padStart(2, '0');
         await invoice.save({ session });
 
         // Create Invoice Items
@@ -333,14 +341,18 @@ exports.createSale = async (req, res) => {
 
         res.json({ message: 'Sale completed successfully', invoice: payload });
 
-        // Log action
         logAction('CREATE_SALE', `Created invoice: ${invoice.invoiceNumber} (Amount: ${final_amount})`, user_id, invoice._id, 'Invoice', req.ip);
     } catch (err) {
         await session.abortTransaction();
         console.error('=== Sales Creation Error ===');
         console.error('Error message:', err.message);
         console.error('Error stack:', err.stack);
-        res.status(500).json({ message: 'Server Error', error: err.message });
+
+        if (err.code === 11000) {
+            res.status(409).json({ message: 'Invoice number conflict. Please try again.', error: err.message });
+        } else {
+            res.status(500).json({ message: 'Server Error', error: err.message });
+        }
     } finally {
         session.endSession();
     }
@@ -384,53 +396,36 @@ exports.getSalesByDateRange = async (req, res) => {
     try {
         let { startDate, endDate, search } = req.query;
 
-        // PERMISSION CHECK: Restrict to "Today" if user lacks VIEW_MONTHLY_SALES
-        // PERMISSION CHECK: Restrict to "Today" if user lacks VIEW_MONTHLY_SALES
+        // PERMISSION CHECK
         const canViewHistory = req.user.role === 'ADMINISTRATIVE' || (req.user.permissions && req.user.permissions.includes('VIEW_MONTHLY_SALES'));
         const isSearching = search && search.trim().length > 0;
 
-        // Check if query is within a single day (approx 24h)
         let isSingleDay = false;
         if (startDate && endDate) {
-            // Frontend sends start at 00:00 and end at 23:59, so diff is ~24h
             const diff = new Date(endDate).getTime() - new Date(startDate).getTime();
-            isSingleDay = diff <= 86500000; // 24h + small buffer
+            isSingleDay = diff <= 86500000;
         }
 
-        // Rule: If no monthly permission, restrict access unless:
-        // 1. It's a search
-        // 2. It's a single day query (<= 24h)
         if (!canViewHistory && !isSearching && !isSingleDay) {
             const today = new Date();
-            // Create start of today (00:00:00)
             const startOfToday = new Date(today);
             startOfToday.setHours(0, 0, 0, 0);
-
-            // Create end of today (23:59:59)
             const endOfToday = new Date(today);
             endOfToday.setHours(23, 59, 59, 999);
-
             startDate = startOfToday.toISOString();
             endDate = endOfToday.toISOString();
         }
 
         let query = { status: { $ne: 'CANCELLED' } };
 
-        // Date range filter
         if (startDate && endDate) {
             const start = new Date(startDate);
             const end = new Date(endDate);
-
-            // If simple date string provided (length 10 e.g. "YYYY-MM-DD")
             if (startDate.length === 10) start.setHours(0, 0, 0, 0);
             if (endDate.length === 10) end.setHours(23, 59, 59, 999);
-
             query.createdAt = { $gte: start, $lte: end };
         }
 
-        let salesQuery = Invoice.find(query);
-
-        // Search functionality
         if (search) {
             const customers = await Customer.find({
                 $or: [
@@ -440,9 +435,6 @@ exports.getSalesByDateRange = async (req, res) => {
             }).select('_id');
 
             const customerIds = customers.map(c => c._id);
-
-            // Combine with existing query using $and to ensure status/date filters apply
-            // But search conditions themselves are OR (InvoiceNumber OR CustomerName OR CustomerPhone)
             query.$or = [
                 { customer: { $in: customerIds } },
                 { invoiceNumber: { $regex: search, $options: 'i' } }
@@ -487,13 +479,11 @@ exports.updateSale = async (req, res) => {
 
         const { paid_amount, payment_method, note, items, discount } = req.body;
 
-        // Update invoice basic fields
         if (paid_amount !== undefined) sale.paidAmount = paid_amount;
         if (payment_method) sale.paymentMethod = payment_method;
         if (note !== undefined) sale.note = note;
         if (discount !== undefined) sale.discount = discount;
 
-        // Update items if provided
         let newTotalAmount = 0;
 
         if (items && Array.isArray(items)) {
@@ -518,15 +508,12 @@ exports.updateSale = async (req, res) => {
                     newTotalAmount += subtotal;
                 }
             }
-
             sale.totalAmount = newTotalAmount;
         }
 
-        // Recalculate amounts
         const finalAmount = sale.totalAmount - (sale.discount || 0);
         sale.dueAmount = finalAmount - sale.paidAmount;
 
-        // Update status
         if (sale.paidAmount >= finalAmount) {
             sale.status = 'PAID';
         } else if (sale.paidAmount > 0) {
@@ -551,13 +538,11 @@ exports.updateSale = async (req, res) => {
 // Soft delete sale
 exports.deleteSale = async (req, res) => {
     try {
-        // PERMISSION CHECK
         if (req.user.role !== 'ADMINISTRATIVE' && (!req.user.permissions || !req.user.permissions.includes('DELETE_SALES'))) {
             return res.status(403).json({ message: 'Access denied. You do not have permission to delete invoices.' });
         }
 
         const sale = await Invoice.findById(req.params.id);
-
         if (!sale) {
             return res.status(404).json({ message: 'Invoice not found' });
         }
@@ -566,8 +551,6 @@ exports.deleteSale = async (req, res) => {
         await sale.save();
 
         res.json({ message: 'Invoice cancelled successfully' });
-
-        // Log action
         logAction('CANCEL_SALE', `Cancelled invoice: ${sale.invoiceNumber}`, req.user.id, sale._id, 'Invoice', req.ip);
     } catch (err) {
         console.error(err);
@@ -576,38 +559,29 @@ exports.deleteSale = async (req, res) => {
 };
 
 // Add payment to invoice
-// Add payment to invoice
 exports.addPayment = async (req, res) => {
     try {
         const sale = await Invoice.findById(req.params.id);
-
         if (!sale) {
             return res.status(404).json({ message: 'Invoice not found' });
         }
 
         const { amount, payment_method, note } = req.body;
-
         if (!amount || amount <= 0) {
             return res.status(400).json({ message: 'Invalid payment amount' });
         }
 
-        // Create payment history record
-        console.log('Creating PaymentHistory record...');
         const payment = new PaymentHistory({
             invoice: sale._id,
             amount: amount,
             paymentMethod: payment_method || sale.paymentMethod,
             note: note
         });
-
         await payment.save();
-        console.log('PaymentHistory saved:', payment._id);
 
-        // Update invoice paid amount
         sale.paidAmount += amount;
         sale.dueAmount = (sale.totalAmount - sale.discount) - sale.paidAmount;
 
-        // Update status
         const finalAmount = sale.totalAmount - (sale.discount || 0);
         if (sale.paidAmount >= finalAmount) {
             sale.status = 'PAID';
@@ -616,7 +590,6 @@ exports.addPayment = async (req, res) => {
         }
 
         await sale.save();
-
         res.json({ message: 'Payment added successfully', invoice: sale });
     } catch (err) {
         console.error('Payment Error:', err);
@@ -638,7 +611,6 @@ exports.getPaymentHistory = async (req, res) => {
                     select: 'name phone'
                 }
             });
-
         res.json(history);
     } catch (err) {
         console.error('Fetch History Error:', err);
@@ -646,7 +618,6 @@ exports.getPaymentHistory = async (req, res) => {
     }
 };
 
-// Update payment amount
 // Update payment amount
 exports.updatePayment = async (req, res) => {
     const session = await mongoose.startSession();
@@ -657,7 +628,6 @@ exports.updatePayment = async (req, res) => {
         const { amount, note, payment_method, invoice_number } = req.body;
         const user = req.user;
 
-        // PERMISSION CHECK
         const canEdit = user.role === 'ADMINISTRATIVE' || (user.permissions && user.permissions.includes('EDIT_DUE'));
         if (!canEdit) {
             await session.abortTransaction();
@@ -670,19 +640,16 @@ exports.updatePayment = async (req, res) => {
             return res.status(404).json({ message: 'Payment record not found' });
         }
 
-        // Find Current Invoice
         const currentInvoice = await Invoice.findById(payment.invoice).session(session);
         if (!currentInvoice) {
             await session.abortTransaction();
             return res.status(404).json({ message: 'Associated invoice not found' });
         }
 
-        // Check if Invoice is being changed
         let targetInvoice = currentInvoice;
         let isInvoiceChanged = false;
 
         if (invoice_number && invoice_number !== currentInvoice.invoiceNumber) {
-            // User wants to move payment to another invoice
             const newInvoice = await Invoice.findOne({ invoiceNumber: invoice_number }).session(session);
             if (!newInvoice) {
                 await session.abortTransaction();
@@ -701,47 +668,31 @@ exports.updatePayment = async (req, res) => {
         }
 
         if (isInvoiceChanged) {
-            // 1. Revert Old Invoice
-            // Ensure paidAmount doesn't go below 0
             currentInvoice.paidAmount = Math.max(0, currentInvoice.paidAmount - oldAmount);
-
             const currentFinal = currentInvoice.totalAmount - (currentInvoice.discount || 0);
             currentInvoice.dueAmount = Math.max(0, currentFinal - currentInvoice.paidAmount);
 
-            // Update Old Invoice Status
             if (currentInvoice.paidAmount >= currentFinal) currentInvoice.status = 'PAID';
             else if (currentInvoice.paidAmount > 0) currentInvoice.status = 'PARTIAL';
             else currentInvoice.status = 'PENDING';
-
             await currentInvoice.save({ session });
 
-            // 2. Apply to New Invoice (targetInvoice)
-            targetInvoice.paidAmount += newAmount; // Add NEW amount to new invoice
+            targetInvoice.paidAmount += newAmount;
             const targetFinal = targetInvoice.totalAmount - (targetInvoice.discount || 0);
             targetInvoice.dueAmount = Math.max(0, targetFinal - targetInvoice.paidAmount);
 
-            // Update New Invoice Status
             if (targetInvoice.paidAmount >= targetFinal) targetInvoice.status = 'PAID';
             else if (targetInvoice.paidAmount > 0) targetInvoice.status = 'PARTIAL';
             else targetInvoice.status = 'PENDING';
-
             await targetInvoice.save({ session });
 
-            // Update Payment Record
             payment.invoice = targetInvoice._id;
-
         } else {
-            // Same Invoice - Just adjust diff
             const amountDiff = newAmount - oldAmount;
-
-            // If amountDiff is negative (newAmount < oldAmount), paidAmount decreases.
-            // We ensure it doesn't drop below zero to avoid schema validation errors.
             targetInvoice.paidAmount = Math.max(0, targetInvoice.paidAmount + amountDiff);
-
             const finalAmount = targetInvoice.totalAmount - (targetInvoice.discount || 0);
             targetInvoice.dueAmount = Math.max(0, finalAmount - targetInvoice.paidAmount);
 
-            // Update Status
             if (targetInvoice.paidAmount >= finalAmount) {
                 targetInvoice.status = 'PAID';
             } else if (targetInvoice.paidAmount > 0) {
@@ -749,31 +700,25 @@ exports.updatePayment = async (req, res) => {
             } else {
                 targetInvoice.status = 'PENDING';
             }
-
             await targetInvoice.save({ session });
         }
 
-        // Update Payment Record fields
         payment.amount = newAmount;
         if (note !== undefined) payment.note = note;
         if (payment_method) payment.paymentMethod = payment_method;
 
         await payment.save({ session });
-
         await session.commitTransaction();
 
         const logMsg = isInvoiceChanged
             ? `Moved payment from Inv #${currentInvoice.invoiceNumber} to #${targetInvoice.invoiceNumber} & updated: ${oldAmount} -> ${newAmount}`
             : `Updated payment for invoice ${targetInvoice.invoiceNumber}: ${oldAmount} -> ${newAmount}`;
-
         logAction('UPDATE_PAYMENT', logMsg, user.id, payment._id, 'PaymentHistory', req.ip);
 
         res.json({ message: 'Payment updated successfully', payment, invoice: targetInvoice });
-
     } catch (err) {
         await session.abortTransaction();
         console.error('Update Payment Error:', err);
-        // Return actual error message for debugging if it's a validation error
         const errorMessage = err.name === 'ValidationError' ? err.message : 'Server Error';
         res.status(500).json({ message: errorMessage, error: err.toString() });
     } finally {
@@ -790,7 +735,6 @@ exports.deletePayment = async (req, res) => {
         const { id } = req.params;
         const user = req.user;
 
-        // PERMISSION CHECK
         const canDelete = user.role === 'ADMINISTRATIVE' || (user.permissions && user.permissions.includes('DELETE_DUE'));
         if (!canDelete) {
             await session.abortTransaction();
@@ -806,15 +750,10 @@ exports.deletePayment = async (req, res) => {
         const invoice = await Invoice.findById(payment.invoice).session(session);
 
         if (invoice) {
-            // Revert Invoice Paid Amount
-            // Ensure paidAmount doesn't go below 0
             invoice.paidAmount = Math.max(0, invoice.paidAmount - payment.amount);
-
-            // Recalculate Due
             const finalAmount = invoice.totalAmount - (invoice.discount || 0);
             invoice.dueAmount = Math.max(0, finalAmount - invoice.paidAmount);
 
-            // Update Status
             if (invoice.paidAmount >= finalAmount) {
                 invoice.status = 'PAID';
             } else if (invoice.paidAmount > 0) {
@@ -822,22 +761,18 @@ exports.deletePayment = async (req, res) => {
             } else {
                 invoice.status = 'PENDING';
             }
-
             await invoice.save({ session });
         }
 
         await PaymentHistory.findByIdAndDelete(id).session(session);
-
         await session.commitTransaction();
 
         logAction('DELETE_PAYMENT', `Deleted payment of ${payment.amount} for invoice ${invoice ? invoice.invoiceNumber : 'Unknown'}`, user.id, payment._id, 'PaymentHistory', req.ip);
 
         res.json({ message: 'Payment deleted successfully', invoice });
-
     } catch (err) {
         await session.abortTransaction();
         console.error('Delete Payment Error:', err);
-        // Return actual error message for debugging
         const errorMessage = err.name === 'ValidationError' ? err.message : 'Server Error';
         res.status(500).json({ message: errorMessage, error: err.toString() });
     } finally {
